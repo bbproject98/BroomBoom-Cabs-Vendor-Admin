@@ -78,13 +78,13 @@ export const VendorSubscriptionDetailModal: React.FC<VendorSubscriptionDetailMod
   const isActive = subscription.status === "active";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
-          <div className="flex items-center gap-3">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 mr-2">
             <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-lg border ${
+              className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center font-bold text-base sm:text-lg border shrink-0 ${
                 isPlatinum
                   ? "bg-purple-500/10 border-purple-500/30 text-purple-400"
                   : isGold
@@ -92,19 +92,19 @@ export const VendorSubscriptionDetailModal: React.FC<VendorSubscriptionDetailMod
                   : "bg-emerald-400/10 border-emerald-400/30 text-emerald-400"
               }`}
             >
-              <CreditCard className="w-5 h-5" />
+              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">{subscription.vendorName}</h3>
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-bold border border-slate-700">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-[180px] sm:max-w-none">{subscription.vendorName}</h3>
+                <span className="font-mono text-[10px] sm:text-xs px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-bold border border-slate-700">
                   {subscription.subscriptionId}
                 </span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${tierBadgeClass}`}>
+                <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${tierBadgeClass}`}>
                   {subscription.planTier}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
                 Application: <span className="text-slate-300 font-medium">{subscription.applicationId}</span> • Created{" "}
                 {formatDate(subscription.createdAt)}
               </p>
@@ -112,14 +112,14 @@ export const VendorSubscriptionDetailModal: React.FC<VendorSubscriptionDetailMod
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Body */}
-        <div className="p-6 space-y-6 overflow-y-auto text-xs">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto text-xs">
           {/* Quick Communication Bar */}
           <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
             <a

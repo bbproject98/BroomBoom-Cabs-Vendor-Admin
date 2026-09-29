@@ -45,6 +45,7 @@ export default function SettingsPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fetchStats = async () => {
     try {
@@ -88,6 +89,8 @@ export default function SettingsPage() {
         vendorCount={vendorTotal}
         vendorSubCount={subscriptionTotal}
         pendingTicketCount={pendingTickets}
+        isOpenMobile={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
       <main className="flex-1 flex flex-col min-w-0">
@@ -96,9 +99,10 @@ export default function SettingsPage() {
           subtitle="Database health and Vendor management configuration"
           onRefresh={fetchStats}
           isRefreshing={refreshing}
+          onMenuToggle={() => setMobileMenuOpen(true)}
         />
 
-        <div className="p-8 space-y-8 overflow-y-auto">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 overflow-y-auto pb-24 lg:pb-8">
           {/* ========================================================= */}
           {/* DATABASE STATUS */}
           {/* ========================================================= */}
@@ -112,7 +116,7 @@ export default function SettingsPage() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
               {/* PostgreSQL */}
               <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
                 <div className="flex items-start justify-between">
@@ -393,7 +397,7 @@ export default function SettingsPage() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
               {/* Vendor Leads */}
               <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">

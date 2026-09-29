@@ -63,27 +63,27 @@ export const AddVendorLeadModal: React.FC<AddVendorLeadModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/40">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-400 text-slate-950 flex items-center justify-center font-bold">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/40">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-400 text-slate-950 flex items-center justify-center font-bold shrink-0">
               <Plus className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">Manual Vendor / Fleet Registration</h3>
-              <p className="text-[11px] text-slate-400">Record an onboarding enquiry directly from a fleet operator</p>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-bold text-white truncate">Manual Vendor / Fleet Registration</h3>
+              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">Record an onboarding enquiry directly from a fleet operator</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-3.5 sm:space-y-4 text-xs overflow-y-auto">
           <div>
             <label className="block text-slate-400 font-semibold mb-1">Vendor / Operator Name *</label>
             <input
@@ -96,7 +96,7 @@ export const AddVendorLeadModal: React.FC<AddVendorLeadModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-400 font-semibold mb-1">Mobile Phone *</label>
               <input
@@ -120,7 +120,7 @@ export const AddVendorLeadModal: React.FC<AddVendorLeadModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-400 font-semibold mb-1">City *</label>
               <input
@@ -144,7 +144,7 @@ export const AddVendorLeadModal: React.FC<AddVendorLeadModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-400 font-semibold mb-1">Vendor Tier</label>
               <select

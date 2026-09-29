@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStatsWithTickets | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fetchStats = async () => {
     try {
@@ -68,6 +69,8 @@ export default function DashboardPage() {
         vendorCount={stats?.vendor?.total}
         vendorSubCount={stats?.subscriptions?.total}
         pendingTicketCount={stats?.tickets?.pending}
+        isOpenMobile={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
       <main className="flex-1 flex flex-col min-w-0">
@@ -76,18 +79,19 @@ export default function DashboardPage() {
           subtitle="Real-time overview of BroomBoom Vendor operations"
           onRefresh={fetchStats}
           isRefreshing={refreshing}
+          onMenuToggle={() => setMobileMenuOpen(true)}
         />
 
-        <div className="p-8 space-y-8 overflow-y-auto">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 overflow-y-auto pb-24 lg:pb-8">
           {/* ========================================================= */}
           {/* TOP METRIC CARDS */}
           {/* ========================================================= */}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
             {/* Total Vendor Leads */}
             <Link
               href="/vendor"
-              className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/60 border border-slate-800 hover:border-emerald-400/40 relative overflow-hidden shadow-lg transition-all group"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/60 border border-slate-800 hover:border-emerald-400/40 relative overflow-hidden shadow-lg transition-all group"
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -98,11 +102,11 @@ export default function DashboardPage() {
                 <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors" />
               </div>
 
-              <div className="text-3xl font-black text-white">
+              <div className="text-2xl sm:text-3xl font-black text-white">
                 {loading ? "—" : vendorTotal}
               </div>
 
-              <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs text-slate-400">
                 <span>
                   Gold:{" "}
                   <strong className="text-white">
@@ -215,9 +219,9 @@ export default function DashboardPage() {
           {/* VENDOR MANAGEMENT CARDS */}
           {/* ========================================================= */}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {/* Vendor Leads */}
-            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/20 flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-slate-900 to-slate-900 border border-emerald-500/20 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 rounded-xl bg-emerald-400 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-emerald-500/20">
@@ -239,7 +243,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/vendor"
                   className="flex-1 text-center py-2.5 px-4 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs shadow-md transition-all"
@@ -249,7 +253,7 @@ export default function DashboardPage() {
 
                 <a
                   href="/api/export?type=vendor"
-                  className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition-all flex items-center gap-1.5"
+                  className="py-2.5 px-3.5 sm:px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition-all flex items-center gap-1.5"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
                   <span>CSV</span>
@@ -258,7 +262,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Subscriptions */}
-            <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 via-slate-900 to-slate-900 border border-blue-500/20 flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 via-slate-900 to-slate-900 border border-blue-500/20 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 rounded-xl bg-blue-500 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-blue-500/20">
@@ -280,7 +284,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/vendor/subscriptions"
                   className="flex-1 text-center py-2.5 px-4 rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-bold text-xs shadow-md transition-all"
@@ -290,7 +294,7 @@ export default function DashboardPage() {
 
                 <a
                   href="/api/export?type=subscriptions"
-                  className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition-all flex items-center gap-1.5"
+                  className="py-2.5 px-3.5 sm:px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 transition-all flex items-center gap-1.5"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
                   <span>CSV</span>
@@ -299,7 +303,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Plan Change Tickets */}
-            <div className="p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/20 flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/20 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/20">
@@ -321,7 +325,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/vendor?tab=tickets"
                   className="flex-1 text-center py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-all"
@@ -329,7 +333,7 @@ export default function DashboardPage() {
                   Open Tickets →
                 </Link>
 
-                <span className="py-2.5 px-4 rounded-xl bg-slate-800 text-slate-400 font-semibold text-xs border border-slate-700">
+                <span className="py-2.5 px-3.5 sm:px-4 rounded-xl bg-slate-800 text-slate-400 font-semibold text-xs border border-slate-700">
                   {stats?.tickets?.total ?? 0} Total
                 </span>
               </div>
@@ -340,9 +344,9 @@ export default function DashboardPage() {
           {/* RECENT ACTIVITY + TOP CITIES */}
           {/* ========================================================= */}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Recent Activity */}
-            <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900 border border-slate-800">
+            <div className="lg:col-span-2 p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800">
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="text-sm font-bold text-white">
@@ -366,19 +370,19 @@ export default function DashboardPage() {
                   stats.recentActivity.map((act) => (
                     <div
                       key={act.id + act.timestamp}
-                      className="py-3.5 flex items-center justify-between gap-4 group"
+                      className="py-3.5 flex items-center justify-between gap-3 sm:gap-4 group"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
                           <Car className="w-4 h-4" />
                         </div>
 
-                        <div>
-                          <p className="text-xs font-semibold text-white group-hover:text-emerald-400 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-white group-hover:text-emerald-400 transition-colors truncate">
                             {act.title}
                           </p>
 
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px] text-slate-400 truncate">
                             {act.subtitle}
                           </p>
                         </div>
@@ -412,7 +416,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Top Cities */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-sm font-bold text-white">

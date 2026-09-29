@@ -246,46 +246,46 @@ export const VendorDetailModal: React.FC<VendorDetailModalProps> = ({
   const completedTickets = tickets.filter((t) => t.status !== "PENDING");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/40">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-400/10 border border-emerald-400/30 text-emerald-400 flex items-center justify-center font-bold">
-              <Car className="w-5 h-5" />
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/40">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 mr-2">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-400/10 border border-emerald-400/30 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+              <Car className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">{lead.fullName}</h3>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-semibold border border-slate-700">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-[180px] sm:max-w-none">{lead.fullName}</h3>
+                <span className="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-semibold border border-slate-700">
                   {lead.applicationId}
                 </span>
                 {pendingTickets.length > 0 && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
-                    ⚡ Upgrade Requested
+                    ⚡ Upgrade
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">
                 Registered on {formatDate(lead.createdAt)} via {lead.source || "Vendor Portal"}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto">
           {/* Quick Contact Bar */}
-          <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
             <a
               href={`tel:${lead.mobile}`}
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold text-xs shadow-md transition-all"
+              className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold text-xs shadow-md transition-all"
             >
               <Phone className="w-3.5 h-3.5" />
               <span>Call: {lead.mobile}</span>
@@ -295,7 +295,7 @@ export const VendorDetailModal: React.FC<VendorDetailModalProps> = ({
               href={whatsAppGeneralUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-semibold text-xs shadow-md transition-all"
+              className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-semibold text-xs shadow-md transition-all"
             >
               <MessageCircle className="w-3.5 h-3.5" />
               <span>WhatsApp Chat</span>
@@ -304,7 +304,7 @@ export const VendorDetailModal: React.FC<VendorDetailModalProps> = ({
             {lead.email && (
               <a
                 href={`mailto:${lead.email}`}
-                className="flex items-center gap-1.5 py-2 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium transition-all"
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium transition-all"
               >
                 <Mail className="w-3.5 h-3.5" />
                 <span>Email</span>
@@ -319,13 +319,13 @@ export const VendorDetailModal: React.FC<VendorDetailModalProps> = ({
                 Vendor Application & License Status
               </label>
               {lead.status === "approved" && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  Territory License Active on Vendor Dashboard
+                  Active
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2">
               {(
                 [
                   { id: "new", label: "New", color: "hover:border-blue-500 hover:bg-blue-500/10", active: "bg-blue-500/20 border-blue-500 text-blue-400 font-bold" },
@@ -353,7 +353,7 @@ export const VendorDetailModal: React.FC<VendorDetailModalProps> = ({
 
           {/* VENDOR PORTAL LOGIN CREDENTIALS DESK */}
           <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700/80 shadow-lg space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   <Key className="w-4 h-4" />
@@ -822,8 +822,8 @@ export const VendorDetailModal: React.FC<VendorDetailModalProps> = ({
         const previewPassword = `BroomBoom@${reqTierUpper}2026`;
 
         return (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-            <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4">
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md">
+            <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   {ticketActionModal.type === "reject" ? (
