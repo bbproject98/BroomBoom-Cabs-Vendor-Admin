@@ -2,7 +2,6 @@ import { Pool } from "pg";
 import fs from "fs";
 import path from "path";
 import {
-  FranchiseLead,
   VendorLead,
   LeadStatus,
   VendorSubscription,
@@ -14,7 +13,6 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const LOCAL_STORE_FILE = path.join(DATA_DIR, "admin-unified-store.json");
 
 interface LocalStoreState {
-  franchiseLeads: FranchiseLead[];
   vendorLeads: VendorLead[];
   vendorSubscriptions?: VendorSubscription[];
   tickets?: PlanChangeTicket[];
@@ -89,34 +87,6 @@ export async function initTables(): Promise<boolean> {
     if (!pool) return false;
 
     const ddl = `
-      CREATE TABLE IF NOT EXISTS franchise_leads (
-        id VARCHAR(64) PRIMARY KEY,
-        application_id VARCHAR(64) UNIQUE NOT NULL,
-        full_name VARCHAR(255) NOT NULL,
-        mobile VARCHAR(50) NOT NULL,
-        alternate_phone VARCHAR(50),
-        email VARCHAR(255),
-        state VARCHAR(100),
-        city VARCHAR(100) NOT NULL,
-        pincode VARCHAR(20),
-        proposed_address TEXT,
-        space_status VARCHAR(100),
-        carpet_area VARCHAR(100),
-        preferred_package VARCHAR(50) NOT NULL,
-        package_name VARCHAR(150),
-        investment_budget VARCHAR(100),
-        finance_required VARCHAR(100) DEFAULT 'Self-Funded',
-        loan_assistance VARCHAR(50) DEFAULT 'No',
-        current_profession VARCHAR(150),
-        has_experience VARCHAR(150),
-        message TEXT,
-        source VARCHAR(50) DEFAULT 'apply_page',
-        status VARCHAR(50) DEFAULT 'new',
-        admin_notes TEXT,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
       CREATE TABLE IF NOT EXISTS vendor_leads (
         id VARCHAR(64) PRIMARY KEY,
         application_id VARCHAR(64) UNIQUE NOT NULL,
@@ -213,7 +183,6 @@ export async function initTables(): Promise<boolean> {
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE INDEX IF NOT EXISTS idx_franchise_created ON franchise_leads(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_vendor_created ON vendor_leads(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sub_created ON vendor_subscriptions(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sub_status ON vendor_subscriptions(status);
@@ -245,7 +214,6 @@ function readLocalStore(): LocalStoreState {
   ensureDataDir();
   if (!fs.existsSync(LOCAL_STORE_FILE)) {
     const init: LocalStoreState = {
-      franchiseLeads: [],
       vendorLeads: [],
       vendorSubscriptions: [],
       tickets: [],
@@ -264,7 +232,6 @@ function readLocalStore(): LocalStoreState {
     return parsed;
   } catch {
     return {
-      franchiseLeads: [],
       vendorLeads: [],
       vendorSubscriptions: [],
       tickets: [],
@@ -281,43 +248,17 @@ function writeLocalStore(state: LocalStoreState) {
   fs.renameSync(tmp, LOCAL_STORE_FILE);
 }
 
-// Read from sibling landing pages if present
-export function syncSiblingLandingPageStores(): { franchiseCount: number; vendorCount: number } {
-  let franchiseCount = 0;
+// Read from sibling vendor landing page if present
+export function syncSiblingLandingPageStores(): { vendorCount: number } {
   let vendorCount = 0;
 
-  const franchisePath = path.resolve(
-    process.cwd(),
-    "../Broom boom franchise landing page/data/broomboom-store.json"
-  );
   const vendorPath = path.resolve(
     process.cwd(),
     "../broomboomvendor page/data/broomboom-vendor-store.json"
   );
 
   const localState = readLocalStore();
-  const existingFranchiseIds = new Set(localState.franchiseLeads.map((l) => l.applicationId || l.id));
   const existingVendorIds = new Set(localState.vendorLeads.map((l) => l.applicationId || l.id));
-
-  // Sync Franchise Leads from sibling project
-  if (fs.existsSync(franchisePath)) {
-    try {
-      const raw = fs.readFileSync(franchisePath, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed.leads)) {
-        parsed.leads.forEach((l: any) => {
-          const key = l.applicationId || l.id;
-          if (!existingFranchiseIds.has(key)) {
-            localState.franchiseLeads.push(l);
-            existingFranchiseIds.add(key);
-            franchiseCount++;
-          }
-        });
-      }
-    } catch (err: any) {
-      console.warn("Could not sync franchise store:", err.message);
-    }
-  }
 
   // Sync Vendor Leads from sibling project
   if (fs.existsSync(vendorPath)) {
@@ -339,307 +280,15 @@ export function syncSiblingLandingPageStores(): { franchiseCount: number; vendor
     }
   }
 
-  if (franchiseCount > 0 || vendorCount > 0) {
+  if (vendorCount > 0) {
     writeLocalStore(localState);
   }
 
-  return { franchiseCount, vendorCount };
+  return { vendorCount };
 }
 
-// Franchise Leads DB Operations
+// Admin DB Operations
 export const adminDb = {
-  franchise: {
-    async getAll(filters?: {
-      status?: string;
-      package?: string;
-      query?: string;
-    }): Promise<FranchiseLead[]> {
-      syncSiblingLandingPageStores();
-
-      const pool = await getDbPool();
-      let pgLeads: FranchiseLead[] = [];
-
-      if (pool) {
-        try {
-          await initTables();
-          let sql = "SELECT * FROM franchise_leads WHERE 1=1";
-          const values: any[] = [];
-          let idx = 1;
-
-          if (filters?.status && filters.status !== "all") {
-            sql += ` AND LOWER(status) = LOWER($${idx++})`;
-            values.push(filters.status);
-          }
-          if (filters?.package && filters.package !== "all") {
-            sql += ` AND LOWER(preferred_package) = LOWER($${idx++})`;
-            values.push(filters.package);
-          }
-          if (filters?.query) {
-            sql += ` AND (
-              LOWER(full_name) LIKE LOWER($${idx})
-              OR LOWER(city) LIKE LOWER($${idx})
-              OR mobile LIKE $${idx}
-              OR LOWER(application_id) LIKE LOWER($${idx})
-            )`;
-            values.push(`%${filters.query}%`);
-            idx++;
-          }
-          sql += " ORDER BY created_at DESC";
-
-          const res = await pool.query(sql, values);
-          pgLeads = res.rows.map((r) => ({
-            id: r.id,
-            applicationId: r.application_id,
-            fullName: r.full_name,
-            mobile: r.mobile,
-            alternatePhone: r.alternate_phone || undefined,
-            email: r.email || "",
-            state: r.state || "",
-            city: r.city,
-            pincode: r.pincode || undefined,
-            proposedAddress: r.proposed_address || undefined,
-            spaceStatus: r.space_status || undefined,
-            carpetArea: r.carpet_area || undefined,
-            preferredPackage: r.preferred_package,
-            packageName: r.package_name,
-            investmentBudget: r.investment_budget || undefined,
-            financeRequired: r.finance_required || undefined,
-            loanAssistance: r.loan_assistance || undefined,
-            currentProfession: r.current_profession || undefined,
-            hasExperience: r.has_experience || undefined,
-            message: r.message || undefined,
-            source: r.source || "apply_page",
-            status: (r.status as LeadStatus) || "new",
-            adminNotes: r.admin_notes || undefined,
-            createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
-            updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
-          }));
-        } catch (e: any) {
-          console.warn("[ADMIN DB] Error querying franchise leads from pg:", e.message);
-        }
-      }
-
-      const localState = readLocalStore();
-      const combinedMap = new Map<string, FranchiseLead>();
-
-      localState.franchiseLeads.forEach((l) => {
-        const key = l.applicationId || l.id;
-        combinedMap.set(key, l);
-      });
-
-      pgLeads.forEach((l) => {
-        const key = l.applicationId || l.id;
-        combinedMap.set(key, l);
-      });
-
-      let all = Array.from(combinedMap.values());
-
-      if (filters?.status && filters.status !== "all") {
-        all = all.filter((l) => l.status === filters.status);
-      }
-      if (filters?.package && filters.package !== "all") {
-        all = all.filter((l) => l.preferredPackage === filters.package);
-      }
-      if (filters?.query) {
-        const q = filters.query.toLowerCase().trim();
-        all = all.filter(
-          (l) =>
-            l.fullName.toLowerCase().includes(q) ||
-            l.mobile.includes(q) ||
-            l.city.toLowerCase().includes(q) ||
-            l.applicationId.toLowerCase().includes(q)
-        );
-      }
-
-      all.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      return all;
-    },
-
-    async getById(id: string): Promise<FranchiseLead | null> {
-      const all = await adminDb.franchise.getAll();
-      return all.find((l) => l.id === id || l.applicationId === id) || null;
-    },
-
-    async create(data: Partial<FranchiseLead>): Promise<FranchiseLead> {
-      const now = new Date().toISOString();
-      const id = `lead-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const randomSerial = Math.floor(1000 + Math.random() * 9000);
-      const applicationId = data.applicationId || `BB-2026-${randomSerial}`;
-
-      const newLead: FranchiseLead = {
-        id,
-        applicationId,
-        fullName: data.fullName || "Unnamed Applicant",
-        mobile: data.mobile || "",
-        alternatePhone: data.alternatePhone,
-        email: data.email || "",
-        state: data.state || "",
-        city: data.city || "",
-        pincode: data.pincode,
-        proposedAddress: data.proposedAddress,
-        spaceStatus: data.spaceStatus,
-        carpetArea: data.carpetArea,
-        preferredPackage: (data.preferredPackage as any) || "gold",
-        packageName: data.packageName || `${(data.preferredPackage || "gold").toUpperCase()} Partner`,
-        investmentBudget: data.investmentBudget || "Flexible",
-        financeRequired: data.financeRequired || "Self-Funded",
-        loanAssistance: data.loanAssistance || "No",
-        currentProfession: data.currentProfession,
-        hasExperience: data.hasExperience,
-        message: data.message,
-        source: data.source || "admin_manual_entry",
-        status: data.status || "new",
-        adminNotes: data.adminNotes || "Created via Admin Portal",
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const pool = await getDbPool();
-      if (pool) {
-        try {
-          await initTables();
-          await pool.query(
-            `INSERT INTO franchise_leads (
-              id, application_id, full_name, mobile, alternate_phone, email, state, city,
-              pincode, proposed_address, space_status, carpet_area, preferred_package,
-              package_name, investment_budget, finance_required, loan_assistance,
-              current_profession, has_experience, message, source, status, admin_notes,
-              created_at, updated_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
-            ON CONFLICT (application_id) DO UPDATE SET status = EXCLUDED.status`,
-            [
-              newLead.id,
-              newLead.applicationId,
-              newLead.fullName,
-              newLead.mobile,
-              newLead.alternatePhone || null,
-              newLead.email,
-              newLead.state || null,
-              newLead.city,
-              newLead.pincode || null,
-              newLead.proposedAddress || null,
-              newLead.spaceStatus || null,
-              newLead.carpetArea || null,
-              newLead.preferredPackage,
-              newLead.packageName || null,
-              newLead.investmentBudget || null,
-              newLead.financeRequired || "Self-Funded",
-              newLead.loanAssistance || "No",
-              newLead.currentProfession || null,
-              newLead.hasExperience || null,
-              newLead.message || null,
-              newLead.source,
-              newLead.status,
-              newLead.adminNotes || null,
-              new Date(newLead.createdAt),
-              new Date(newLead.updatedAt),
-            ]
-          );
-        } catch (e: any) {
-          console.warn("[ADMIN DB] Postgres insert error, continuing to local store:", e.message);
-        }
-      }
-
-      const local = readLocalStore();
-      local.franchiseLeads.unshift(newLead);
-      local.auditLogs.unshift({
-        id: `audit-${Date.now()}`,
-        action: "FRANCHISE_LEAD_CREATED",
-        details: `Created franchise lead ${newLead.applicationId} for ${newLead.fullName}`,
-        timestamp: now,
-      });
-      writeLocalStore(local);
-
-      return newLead;
-    },
-
-    async update(id: string, updates: Partial<FranchiseLead>): Promise<FranchiseLead | null> {
-      const now = new Date().toISOString();
-      const pool = await getDbPool();
-
-      if (pool) {
-        try {
-          await initTables();
-          const setClauses: string[] = ["updated_at = NOW()"];
-          const values: any[] = [];
-          let idx = 1;
-
-          if (updates.status !== undefined) {
-            setClauses.push(`status = $${idx++}`);
-            values.push(updates.status);
-          }
-          if (updates.adminNotes !== undefined) {
-            setClauses.push(`admin_notes = $${idx++}`);
-            values.push(updates.adminNotes);
-          }
-          if (updates.fullName !== undefined) {
-            setClauses.push(`full_name = $${idx++}`);
-            values.push(updates.fullName);
-          }
-          if (updates.mobile !== undefined) {
-            setClauses.push(`mobile = $${idx++}`);
-            values.push(updates.mobile);
-          }
-          if (updates.city !== undefined) {
-            setClauses.push(`city = $${idx++}`);
-            values.push(updates.city);
-          }
-
-          values.push(id);
-          const sql = `UPDATE franchise_leads SET ${setClauses.join(", ")} WHERE id = $${idx} OR application_id = $${idx}`;
-          await pool.query(sql, values);
-        } catch (e: any) {
-          console.warn("[ADMIN DB] Error updating postgres lead:", e.message);
-        }
-      }
-
-      const local = readLocalStore();
-      const index = local.franchiseLeads.findIndex(
-        (l) => l.id === id || l.applicationId === id
-      );
-      if (index !== -1) {
-        local.franchiseLeads[index] = {
-          ...local.franchiseLeads[index],
-          ...updates,
-          updatedAt: now,
-        };
-        local.auditLogs.unshift({
-          id: `audit-${Date.now()}`,
-          action: "FRANCHISE_LEAD_UPDATED",
-          details: `Updated lead ${id}`,
-          timestamp: now,
-        });
-        writeLocalStore(local);
-        return local.franchiseLeads[index];
-      }
-
-      return adminDb.franchise.getById(id);
-    },
-
-    async delete(id: string): Promise<boolean> {
-      const pool = await getDbPool();
-      if (pool) {
-        try {
-          await pool.query("DELETE FROM franchise_leads WHERE id = $1 OR application_id = $1", [id]);
-        } catch (e: any) {
-          console.warn("[ADMIN DB] Postgres delete failed:", e.message);
-        }
-      }
-
-      const local = readLocalStore();
-      const prevLen = local.franchiseLeads.length;
-      local.franchiseLeads = local.franchiseLeads.filter(
-        (l) => l.id !== id && l.applicationId !== id
-      );
-      if (local.franchiseLeads.length !== prevLen) {
-        writeLocalStore(local);
-      }
-      return true;
-    },
-  },
-
   vendor: {
     async getAll(filters?: {
       status?: string;
@@ -2119,19 +1768,11 @@ export const adminDb = {
   },
 
   async getGlobalStats() {
-    const franchise = await adminDb.franchise.getAll();
     const vendor = await adminDb.vendor.getAll();
     const subscriptions = await adminDb.subscription.getAll();
     const tickets = await adminDb.ticket.getAll();
 
     const todayStr = new Date().toISOString().slice(0, 10);
-
-    const fNewToday = franchise.filter((l) => l.createdAt.slice(0, 10) === todayStr).length;
-    const fContacted = franchise.filter((l) => l.status === "contacted").length;
-    const fApproved = franchise.filter((l) => l.status === "approved").length;
-    const fSilver = franchise.filter((l) => l.preferredPackage === "silver").length;
-    const fGold = franchise.filter((l) => l.preferredPackage === "gold").length;
-    const fPlatinum = franchise.filter((l) => l.preferredPackage === "platinum").length;
 
     const vNewToday = vendor.filter((l) => l.createdAt.slice(0, 10) === todayStr).length;
     const vContacted = vendor.filter((l) => l.status === "contacted").length;
@@ -2152,10 +1793,6 @@ export const adminDb = {
     const pendingTickets = tickets.filter((t) => (t.status || "").toUpperCase() === "PENDING").length;
 
     const cityMap: Record<string, number> = {};
-    franchise.forEach((l) => {
-      const c = l.city?.trim() || "Other";
-      cityMap[c] = (cityMap[c] || 0) + 1;
-    });
     vendor.forEach((l) => {
       const c = l.city?.trim() || "Other";
       cityMap[c] = (cityMap[c] || 0) + 1;
@@ -2168,20 +1805,12 @@ export const adminDb = {
 
     const recentActivity: Array<{
       id: string;
-      type: "franchise" | "vendor";
+      type: "vendor";
       title: string;
       subtitle: string;
       status: LeadStatus;
       timestamp: string;
     }> = [
-      ...franchise.map((l) => ({
-        id: l.id,
-        type: "franchise" as const,
-        title: `${l.fullName} applied for ${l.packageName || `${l.preferredPackage.toUpperCase()} Franchise`}`,
-        subtitle: `${l.city}${l.state ? `, ${l.state}` : ""} • ${l.applicationId}`,
-        status: l.status,
-        timestamp: l.createdAt,
-      })),
       ...vendor.map((l) => ({
         id: l.id,
         type: "vendor" as const,
@@ -2197,15 +1826,6 @@ export const adminDb = {
       .slice(0, 10);
 
     return {
-      franchise: {
-        total: franchise.length,
-        newToday: fNewToday,
-        contacted: fContacted,
-        approved: fApproved,
-        silver: fSilver,
-        gold: fGold,
-        platinum: fPlatinum,
-      },
       vendor: {
         total: vendor.length,
         newToday: vNewToday,
@@ -2226,10 +1846,10 @@ export const adminDb = {
       },
       pendingTickets,
       combined: {
-        totalLeads: franchise.length + vendor.length,
-        totalNewToday: fNewToday + vNewToday,
-        totalApproved: fApproved + vApproved,
-        totalContacted: fContacted + vContacted,
+        totalLeads: vendor.length,
+        totalNewToday: vNewToday,
+        totalApproved: vApproved,
+        totalContacted: vContacted,
       },
       topCities,
       recentActivity,
