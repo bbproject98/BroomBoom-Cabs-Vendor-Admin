@@ -6,6 +6,7 @@ import {
   RefreshCw,
   CreditCard,
   Users,
+  Building2,
   Ticket,
   CheckCircle,
   AlertCircle,
@@ -24,6 +25,16 @@ interface DashboardStats {
     approved?: number;
     pending?: number;
     rejected?: number;
+  };
+
+  franchise?: {
+    total?: number;
+    silver?: number;
+    gold?: number;
+    platinum?: number;
+    approved?: number;
+    contacted?: number;
+    newToday?: number;
   };
 
   subscriptions?: {
@@ -82,10 +93,12 @@ export default function SettingsPage() {
   const activeSubscriptions = stats?.subscriptions?.active ?? 0;
 
   const pendingTickets = stats?.tickets?.pending ?? 0;
+  const franchiseTotal = stats?.franchise?.total ?? 0;
 
   return (
-    <div className="flex w-full min-h-screen bg-slate-950">
+    <div className="flex w-full min-h-screen bg-slate-50 text-slate-900">
       <Sidebar
+        franchiseCount={franchiseTotal}
         vendorCount={vendorTotal}
         vendorSubCount={subscriptionTotal}
         pendingTicketCount={pendingTickets}
@@ -95,8 +108,8 @@ export default function SettingsPage() {
 
       <main className="flex-1 flex flex-col min-w-0">
         <Header
-          title="Vendor System Settings"
-          subtitle="Database health and Vendor management configuration"
+          title="System & Database Settings"
+          subtitle="Unified database health and platform configuration"
           onRefresh={fetchStats}
           isRefreshing={refreshing}
           onMenuToggle={() => setMobileMenuOpen(true)}
@@ -109,23 +122,23 @@ export default function SettingsPage() {
 
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Database className="w-4 h-4 text-yellow-400" />
+              <Database className="w-4 h-4 text-yellow-600" />
 
-              <h2 className="text-sm font-bold text-white">
+              <h2 className="text-sm font-bold text-slate-900">
                 Database Status
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
               {/* PostgreSQL */}
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Database
                     </p>
 
-                    <h3 className="mt-2 text-lg font-bold text-white">
+                    <h3 className="mt-2 text-lg font-bold text-slate-900">
                       PostgreSQL
                     </h3>
 
@@ -134,19 +147,19 @@ export default function SettingsPage() {
                     </p>
                   </div>
 
-                  <div className="w-10 h-10 rounded-xl bg-emerald-400/10 border border-emerald-400/20 flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-emerald-600" />
                   </div>
                 </div>
 
                 <div className="mt-5 flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
 
-                  <span className="text-emerald-400 font-semibold">
-                    Vendor database
+                  <span className="text-emerald-700 font-semibold">
+                    Unified database
                   </span>
 
-                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-300">•</span>
 
                   <span className="text-slate-500">
                     Port 5432
@@ -155,33 +168,33 @@ export default function SettingsPage() {
               </div>
 
               {/* Vendor Leads */}
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Vendor Leads
                     </p>
 
-                    <h3 className="mt-2 text-lg font-bold text-white">
+                    <h3 className="mt-2 text-lg font-bold text-slate-900">
                       vendor_leads
                     </h3>
 
                     <p className="text-xs text-slate-500 mt-1">
-                      Primary vendor application table
+                      Primary vendor applications
                     </p>
                   </div>
 
-                  <div className="w-10 h-10 rounded-xl bg-emerald-400/10 border border-emerald-400/20 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-emerald-400" />
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-emerald-600" />
                   </div>
                 </div>
 
-                <div className="mt-5 text-xs text-slate-400">
+                <div className="mt-5 text-xs text-slate-600">
                   {loading ? (
                     "Loading..."
                   ) : (
                     <>
-                      <strong className="text-white">
+                      <strong className="text-slate-900">
                         {vendorTotal}
                       </strong>{" "}
                       vendor records
@@ -190,15 +203,51 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Subscriptions */}
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+              {/* Franchise Leads */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Franchise Leads
+                    </p>
+
+                    <h3 className="mt-2 text-lg font-bold text-slate-900">
+                      franchise_leads
+                    </h3>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      Franchise partner records
+                    </p>
+                  </div>
+
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                    <Building2 className="w-5 h-5 text-amber-600" />
+                  </div>
+                </div>
+
+                <div className="mt-5 text-xs text-slate-600">
+                  {loading ? (
+                    "Loading..."
+                  ) : (
+                    <>
+                      <strong className="text-slate-900">
+                        {franchiseTotal}
+                      </strong>{" "}
+                      franchise records
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Subscriptions */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Subscriptions
                     </p>
 
-                    <h3 className="mt-2 text-lg font-bold text-white">
+                    <h3 className="mt-2 text-lg font-bold text-slate-900">
                       vendor_subscriptions
                     </h3>
 
@@ -207,17 +256,17 @@ export default function SettingsPage() {
                     </p>
                   </div>
 
-                  <div className="w-10 h-10 rounded-xl bg-blue-400/10 border border-blue-400/20 flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-blue-400" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-blue-600" />
                   </div>
                 </div>
 
-                <div className="mt-5 text-xs text-slate-400">
+                <div className="mt-5 text-xs text-slate-600">
                   {loading ? (
                     "Loading..."
                   ) : (
                     <>
-                      <strong className="text-white">
+                      <strong className="text-slate-900">
                         {subscriptionTotal}
                       </strong>{" "}
                       subscription records
@@ -229,39 +278,62 @@ export default function SettingsPage() {
           </section>
 
           {/* ========================================================= */}
-          {/* VENDOR DATABASE TABLES */}
+          {/* DATABASE TABLES */}
           {/* ========================================================= */}
 
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Server className="w-4 h-4 text-emerald-400" />
+              <Server className="w-4 h-4 text-emerald-600" />
 
-              <h2 className="text-sm font-bold text-white">
-                Vendor Database Tables
+              <h2 className="text-sm font-bold text-slate-900">
+                Database Tables (Vendor & Franchise)
               </h2>
             </div>
 
-            <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
-              <div className="divide-y divide-slate-800">
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="divide-y divide-slate-100">
                 {/* vendor_leads */}
                 <div className="p-5 flex items-center justify-between gap-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-400/10 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-emerald-400" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-emerald-600" />
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-slate-900">
                         vendor_leads
                       </p>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Vendor application and lead records
                       </p>
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active
+                  </span>
+                </div>
+
+                {/* franchise_leads */}
+                <div className="p-5 flex items-center justify-between gap-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-amber-600" />
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        franchise_leads
+                      </p>
+
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Franchise partner application and territory records
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
                     Active
                   </span>
                 </div>
@@ -269,22 +341,22 @@ export default function SettingsPage() {
                 {/* vendor_subscriptions */}
                 <div className="p-5 flex items-center justify-between gap-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-blue-400/10 flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-blue-400" />
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-blue-600" />
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-slate-900">
                         vendor_subscriptions
                       </p>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Active and historical vendor subscription records
                       </p>
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-400/10 text-blue-400 border border-blue-400/20">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
                     Active
                   </span>
                 </div>
@@ -292,22 +364,22 @@ export default function SettingsPage() {
                 {/* plan_change_tickets */}
                 <div className="p-5 flex items-center justify-between gap-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-amber-400/10 flex items-center justify-center">
-                      <Ticket className="w-5 h-5 text-amber-400" />
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                      <Ticket className="w-5 h-5 text-amber-600" />
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-slate-900">
                         plan_change_tickets
                       </p>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Vendor plan upgrade and change requests
                       </p>
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
                     Active
                   </span>
                 </div>
@@ -315,22 +387,22 @@ export default function SettingsPage() {
                 {/* vendor_users */}
                 <div className="p-5 flex items-center justify-between gap-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-purple-400/10 flex items-center justify-center">
-                      <ShieldCheck className="w-5 h-5 text-purple-400" />
+                    <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5 text-purple-600" />
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-slate-900">
                         vendor_users
                       </p>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Vendor login credentials and account access
                       </p>
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-400/10 text-purple-400 border border-purple-400/20">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
                     Active
                   </span>
                 </div>
@@ -338,45 +410,22 @@ export default function SettingsPage() {
                 {/* vendor_hubs */}
                 <div className="p-5 flex items-center justify-between gap-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-yellow-400/10 flex items-center justify-center">
-                      <Database className="w-5 h-5 text-yellow-400" />
+                    <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center">
+                      <Database className="w-5 h-5 text-yellow-600" />
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-slate-900">
                         vendor_hubs
                       </p>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         Vendor hub and territory information
                       </p>
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
-                    Active
-                  </span>
-                </div>
-
-                {/* brochure_downloads */}
-                <div className="p-5 flex items-center justify-between gap-5">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-slate-700/50 flex items-center justify-center">
-                      <RefreshCw className="w-5 h-5 text-slate-400" />
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold text-white">
-                        brochure_downloads
-                      </p>
-
-                      <p className="text-xs text-slate-500 mt-1">
-                        Vendor brochure download tracking
-                      </p>
-                    </div>
-                  </div>
-
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-700/40 text-slate-400 border border-slate-700">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-50 text-yellow-700 border border-yellow-200">
                     Active
                   </span>
                 </div>
@@ -385,26 +434,26 @@ export default function SettingsPage() {
           </section>
 
           {/* ========================================================= */}
-          {/* VENDOR OPERATIONS */}
+          {/* OPERATIONS SUMMARY */}
           {/* ========================================================= */}
 
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Users className="w-4 h-4 text-emerald-400" />
+              <Users className="w-4 h-4 text-emerald-600" />
 
-              <h2 className="text-sm font-bold text-white">
-                Vendor Operations
+              <h2 className="text-sm font-bold text-slate-900">
+                Operations Overview
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
               {/* Vendor Leads */}
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                   Vendor Leads
                 </p>
 
-                <p className="text-3xl font-black text-white mt-2">
+                <p className="text-3xl font-black text-slate-900 mt-2">
                   {loading ? "—" : vendorTotal}
                 </p>
 
@@ -417,19 +466,19 @@ export default function SettingsPage() {
                     Pending
                   </span>
 
-                  <span className="text-amber-400 font-semibold">
+                  <span className="text-amber-600 font-bold">
                     {vendorPending}
                   </span>
                 </div>
               </div>
 
               {/* Approved */}
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                   Approved
                 </p>
 
-                <p className="text-3xl font-black text-emerald-400 mt-2">
+                <p className="text-3xl font-black text-emerald-600 mt-2">
                   {loading ? "—" : vendorApproved}
                 </p>
 
@@ -437,19 +486,19 @@ export default function SettingsPage() {
                   Approved vendor applications
                 </p>
 
-                <div className="mt-5 flex items-center gap-2 text-xs text-emerald-400">
+                <div className="mt-5 flex items-center gap-2 text-xs text-emerald-700 font-semibold">
                   <CheckCircle className="w-3.5 h-3.5" />
                   Vendor onboarding
                 </div>
               </div>
 
               {/* Subscriptions */}
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                   Active Subscriptions
                 </p>
 
-                <p className="text-3xl font-black text-blue-400 mt-2">
+                <p className="text-3xl font-black text-blue-600 mt-2">
                   {loading ? "—" : activeSubscriptions}
                 </p>
 
@@ -457,7 +506,7 @@ export default function SettingsPage() {
                   Currently active vendor plans
                 </p>
 
-                <div className="mt-5 flex items-center gap-2 text-xs text-blue-400">
+                <div className="mt-5 flex items-center gap-2 text-xs text-blue-700 font-semibold">
                   <CreditCard className="w-3.5 h-3.5" />
                   Subscription management
                 </div>
@@ -471,35 +520,35 @@ export default function SettingsPage() {
 
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Server className="w-4 h-4 text-slate-400" />
+              <Server className="w-4 h-4 text-slate-500" />
 
-              <h2 className="text-sm font-bold text-white">
+              <h2 className="text-sm font-bold text-slate-900">
                 System Information
               </h2>
             </div>
 
-            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6">
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                     Application
                   </p>
 
-                  <p className="text-sm font-semibold text-white mt-2">
-                    BroomBoom Vendor Admin
+                  <p className="text-sm font-semibold text-slate-900 mt-2">
+                    BroomBoom Operations Admin
                   </p>
 
                   <p className="text-xs text-slate-500 mt-1">
-                    Vendor management administration panel
+                    Unified Franchise & Vendor administration
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                     Data Source
                   </p>
 
-                  <p className="text-sm font-semibold text-white mt-2">
+                  <p className="text-sm font-semibold text-slate-900 mt-2">
                     PostgreSQL
                   </p>
 
@@ -509,30 +558,30 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                     Database Port
                   </p>
 
-                  <p className="text-sm font-semibold text-white mt-2">
+                  <p className="text-sm font-semibold text-slate-900 mt-2">
                     5432
                   </p>
 
                   <p className="text-xs text-slate-500 mt-1">
-                    PostgreSQL service
+                    PostgreSQL service active
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                     Data Scope
                   </p>
 
-                  <p className="text-sm font-semibold text-emerald-400 mt-2">
-                    Vendor Only
+                  <p className="text-sm font-semibold text-emerald-700 mt-2">
+                    Unified Network
                   </p>
 
                   <p className="text-xs text-slate-500 mt-1">
-                    Vendor administration and PostgreSQL data
+                    Franchise and Vendor administration
                   </p>
                 </div>
               </div>
@@ -543,20 +592,20 @@ export default function SettingsPage() {
           {/* REFRESH */}
           {/* ========================================================= */}
 
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center">
-                  <RefreshCw className="w-4 h-4 text-slate-400" />
+                <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <RefreshCw className="w-4 h-4 text-slate-600" />
                 </div>
 
                 <div>
-                  <p className="text-sm font-semibold text-white">
-                    Refresh Vendor Statistics
+                  <p className="text-sm font-semibold text-slate-900">
+                    Refresh System Statistics
                   </p>
 
                   <p className="text-xs text-slate-500 mt-1">
-                    Reload the latest Vendor data from PostgreSQL.
+                    Reload the latest data from PostgreSQL database.
                   </p>
                 </div>
               </div>
@@ -565,7 +614,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={fetchStats}
                 disabled={refreshing}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-white border border-slate-700 transition"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-white shadow-sm transition"
               >
                 <RefreshCw
                   className={`w-4 h-4 ${
@@ -577,24 +626,6 @@ export default function SettingsPage() {
               </button>
             </div>
           </section>
-
-          {/* Information */}
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-
-              <div>
-                <p className="text-sm font-semibold text-emerald-300">
-                  Vendor-only administration
-                </p>
-
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  This Admin application is configured exclusively for Vendor
-                  operations and uses the Vendor PostgreSQL database directly.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
     </div>

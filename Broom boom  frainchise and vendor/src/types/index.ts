@@ -13,6 +13,34 @@ export type PackageTier =
   | "platinum"
   | "undecided";
 
+export interface FranchiseLead {
+  id: string;
+  applicationId: string;
+  fullName: string;
+  mobile: string;
+  alternatePhone?: string;
+  email: string;
+  state?: string;
+  city: string;
+  pincode?: string;
+  proposedAddress?: string;
+  spaceStatus?: string;
+  carpetArea?: string;
+  preferredPackage: PackageTier;
+  packageName?: string;
+  investmentBudget?: string;
+  financeRequired?: string;
+  loanAssistance?: string;
+  currentProfession?: string;
+  hasExperience?: string;
+  message?: string;
+  source?: string;
+  status: LeadStatus;
+  adminNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VendorLead {
   id: string;
   applicationId: string;
@@ -175,6 +203,16 @@ export interface VendorSubscription {
 }
 
 export interface DashboardStats {
+  franchise?: {
+    total: number;
+    newToday: number;
+    contacted: number;
+    approved: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+  };
+
   vendor: {
     total: number;
     newToday: number;
@@ -197,6 +235,13 @@ export interface DashboardStats {
 
   pendingTickets: number;
 
+  combined?: {
+    totalLeads: number;
+    totalNewToday: number;
+    totalApproved: number;
+    totalContacted: number;
+  };
+
   topCities: {
     city: string;
     count: number;
@@ -204,7 +249,7 @@ export interface DashboardStats {
 
   recentActivity: {
     id: string;
-    type: "vendor";
+    type: "franchise" | "vendor";
     title: string;
     subtitle: string;
     status: LeadStatus;

@@ -12,12 +12,8 @@ import {
   CreditCard,
   CheckCircle2,
   Clock,
-  AlertTriangle,
-  ExternalLink,
   ChevronRight,
-  ShieldCheck,
   MapPin,
-  Calendar,
 } from "lucide-react";
 import { VendorSubscription, SubscriptionStatus } from "@/types";
 import { formatDate } from "@/lib/utils";
@@ -39,6 +35,7 @@ export default function VendorSubscriptionsPage() {
   });
 
   const [leadCount, setLeadCount] = useState(0);
+  const [franchiseCount, setFranchiseCount] = useState(0);
   const [pendingTicketCount, setPendingTicketCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -83,6 +80,13 @@ export default function VendorSubscriptionsPage() {
       if (ticketData.success && ticketData.counts) {
         setPendingTicketCount((ticketData.counts.pending || 0) + (ticketData.counts.paymentCompleted || 0));
       }
+
+      // Also get franchise count for sidebar badge
+      const fRes = await fetch("/api/franchise/leads");
+      const fData = await fRes.json();
+      if (fData.success && Array.isArray(fData.leads)) {
+        setFranchiseCount(fData.leads.length);
+      }
     } catch (e) {
       console.error("Failed to load vendor subscriptions:", e);
     } finally {
@@ -108,14 +112,13 @@ export default function VendorSubscriptionsPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.subscription) {
         setSubscriptions((prev) =>
-          prev.map((s) => (s.id === id ? { ...s, status: newStatus } : s))
+          prev.map((s) => (s.id === id ? data.subscription : s))
         );
         if (selectedSub?.id === id) {
-          setSelectedSub((prev) => (prev ? { ...prev, status: newStatus } : null));
+          setSelectedSub(data.subscription);
         }
-        // Refresh overall stats
         fetchSubscriptions();
       }
     } catch (err) {
@@ -131,14 +134,14 @@ export default function VendorSubscriptionsPage() {
         body: JSON.stringify({ adminNotes: notes }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.subscription) {
         setSubscriptions((prev) =>
-          prev.map((s) => (s.id === id ? { ...s, adminNotes: notes } : s))
+          prev.map((s) => (s.id === id ? data.subscription : s))
         );
         if (selectedSub?.id === id) {
-          setSelectedSub((prev) => (prev ? { ...prev, adminNotes: notes } : null));
+          setSelectedSub(data.subscription);
         }
-        alert("Subscription audit notes updated successfully!");
+        alert("Subscription audit notes updated!");
       }
     } catch (err) {
       console.error("Failed to update notes:", err);
@@ -161,8 +164,9 @@ export default function VendorSubscriptionsPage() {
   };
 
   return (
-    <div className="flex w-full min-h-screen bg-slate-950">
+    <div className="flex w-full min-h-screen bg-slate-50 text-slate-900">
       <Sidebar
+        franchiseCount={franchiseCount}
         vendorCount={leadCount}
         vendorSubCount={stats.total}
         pendingTicketCount={pendingTicketCount}
@@ -182,43 +186,43 @@ export default function VendorSubscriptionsPage() {
         <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-y-auto pb-24 lg:pb-8">
           {/* Top Aggregated Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800 relative overflow-hidden">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Total Subscriptions
               </span>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1">{stats.total}</div>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1">Direct from Vendor Portal</p>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{stats.total}</div>
+              <p className="text-[10px] sm:text-[11px] text-slate-400 mt-1">Direct from Vendor Portal</p>
             </div>
 
-            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800 relative overflow-hidden">
-              <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
+              <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">
                 Active Licenses
               </span>
-              <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">{stats.active}</div>
-              <p className="text-[10px] sm:text-[11px] text-emerald-500/80 mt-1">Verified partner hubs</p>
+              <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-1">{stats.active}</div>
+              <p className="text-[10px] sm:text-[11px] text-emerald-700/80 mt-1">Verified partner hubs</p>
             </div>
 
-            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800 relative overflow-hidden">
-              <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider block">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
+              <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider block">
                 Revenue Collected
               </span>
-              <div className="text-xl sm:text-2xl font-black text-blue-400 mt-1">
+              <div className="text-xl sm:text-2xl font-black text-blue-600 mt-1">
                 ₹{stats.totalRevenue.toLocaleString("en-IN")}
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1">{stats.paid} paid transactions</p>
+              <p className="text-[10px] sm:text-[11px] text-slate-400 mt-1">{stats.paid} paid transactions</p>
             </div>
 
-            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800 relative overflow-hidden">
-              <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider block">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
+              <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider block">
                 Pending Gateway
               </span>
-              <div className="text-xl sm:text-2xl font-black text-amber-400 mt-1">{stats.pending}</div>
-              <p className="text-[10px] sm:text-[11px] text-amber-500/80 mt-1">Awaiting completion</p>
+              <div className="text-xl sm:text-2xl font-black text-amber-600 mt-1">{stats.pending}</div>
+              <p className="text-[10px] sm:text-[11px] text-amber-700/80 mt-1">Awaiting completion</p>
             </div>
           </div>
 
           {/* Search, Filter & Export Toolbar */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 sm:gap-4">
             <form onSubmit={handleSearch} className="w-full lg:flex-1 min-w-[200px] relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
@@ -226,7 +230,7 @@ export default function VendorSubscriptionsPage() {
                 placeholder="Search by subscription ID, vendor name, mobile, city, or order ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-sm"
               />
             </form>
 
@@ -234,7 +238,7 @@ export default function VendorSubscriptionsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-emerald-400 font-medium"
+                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-emerald-500 font-medium shadow-sm"
               >
                 <option value="all">All Statuses</option>
                 <option value="active">Active Licenses</option>
@@ -246,7 +250,7 @@ export default function VendorSubscriptionsPage() {
               <select
                 value={paymentStatusFilter}
                 onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-emerald-400 font-medium"
+                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-emerald-500 font-medium shadow-sm"
               >
                 <option value="all">All Payments</option>
                 <option value="PAID">PAID</option>
@@ -258,7 +262,7 @@ export default function VendorSubscriptionsPage() {
               <select
                 value={tierFilter}
                 onChange={(e) => setTierFilter(e.target.value)}
-                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-emerald-400 font-medium"
+                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-emerald-500 font-medium shadow-sm"
               >
                 <option value="all">All Plan Tiers</option>
                 <option value="silver">Silver Partner (₹10,000)</option>
@@ -268,9 +272,9 @@ export default function VendorSubscriptionsPage() {
 
               <a
                 href="/api/export?type=subscriptions"
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-slate-700 transition-all"
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200 transition-all shadow-sm"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Export CSV</span>
               </a>
             </div>
@@ -298,15 +302,15 @@ export default function VendorSubscriptionsPage() {
                       setSelectedSub(sub);
                       setIsDetailOpen(true);
                     }}
-                    className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-lg active:scale-[0.99] transition-all cursor-pointer"
+                    className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3 active:scale-[0.99] transition-all cursor-pointer hover:border-slate-300 hover:shadow-md"
                   >
                     {/* Top: ID, Created Date, Status Badge */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-emerald-400 text-xs">
+                        <span className="font-mono font-bold text-emerald-700 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                           {sub.subscriptionId}
                         </span>
-                        <span className="text-[10px] text-slate-500">
+                        <span className="text-[10px] text-slate-400">
                           {formatDate(sub.createdAt)}
                         </span>
                       </div>
@@ -314,10 +318,10 @@ export default function VendorSubscriptionsPage() {
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           sub.status === "active"
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : sub.status === "pending"
-                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                            : "bg-slate-700/60 text-slate-400 border border-slate-600"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-slate-100 text-slate-600 border border-slate-200"
                         }`}
                       >
                         {sub.status === "active" && <CheckCircle2 className="w-2.5 h-2.5" />}
@@ -328,53 +332,53 @@ export default function VendorSubscriptionsPage() {
 
                     {/* Vendor Partner info */}
                     <div>
-                      <p className="font-bold text-white text-sm">{sub.vendorName}</p>
-                      <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                      <p className="font-bold text-slate-900 text-sm">{sub.vendorName}</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                         <a
                           href={`tel:${sub.vendorMobile}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="hover:text-emerald-400 font-mono"
+                          className="hover:text-emerald-700 font-mono"
                         >
                           {sub.vendorMobile}
                         </a>
                         <span>•</span>
                         <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-slate-500" />
+                          <MapPin className="w-3 h-3 text-slate-400" />
                           {sub.city}
                         </span>
                       </div>
                     </div>
 
                     {/* Plan, Fee & Payment */}
-                    <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
                       <div>
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-1 ${
                             isPlatinum
-                              ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                              ? "bg-purple-50 text-purple-700 border border-purple-200"
                               : isGold
-                              ? "bg-amber-400/20 text-amber-300 border border-amber-400/30"
-                              : "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                           }`}
                         >
                           {sub.planName || `${sub.planTier} Partner`}
                         </span>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-[10px] text-slate-500">
                           {sub.hasExclusivity ? "Exclusivity Reserved" : (sub.billingCycle || "12 Mo Territory")}
                         </p>
                       </div>
 
                       <div className="text-right">
-                        <span className="font-mono font-bold text-white text-sm block">
+                        <span className="font-mono font-bold text-slate-900 text-sm block">
                           ₹{sub.totalAmount ? Number(sub.totalAmount).toLocaleString("en-IN") : "0"}
                         </span>
                         <span
                           className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
                             sub.paymentStatus === "PAID"
-                              ? "bg-emerald-500/20 text-emerald-300"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               : sub.paymentStatus === "FAILED"
-                              ? "bg-rose-500/20 text-rose-300"
-                              : "bg-amber-500/20 text-amber-300"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
                           }`}
                         >
                           {sub.paymentStatus || "PENDING"}
@@ -387,7 +391,7 @@ export default function VendorSubscriptionsPage() {
                       <div className="flex items-center gap-2">
                         <a
                           href={`tel:${sub.vendorMobile}`}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold"
                         >
                           <Phone className="w-3.5 h-3.5" />
                           <span>Call</span>
@@ -408,7 +412,7 @@ export default function VendorSubscriptionsPage() {
                           setSelectedSub(sub);
                           setIsDetailOpen(true);
                         }}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs font-semibold hover:bg-slate-700"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200"
                       >
                         <span>Audit</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -418,10 +422,10 @@ export default function VendorSubscriptionsPage() {
                 );
               })
             ) : (
-              <div className="py-12 text-center text-slate-500 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                <CreditCard className="w-8 h-8 mx-auto mb-2 text-slate-600" />
-                <p className="font-semibold text-sm">No vendor subscriptions found</p>
-                <p className="text-xs text-slate-600 mt-1">
+              <div className="py-12 text-center text-slate-500 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                <CreditCard className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                <p className="font-semibold text-slate-900 text-sm">No vendor subscriptions found</p>
+                <p className="text-xs text-slate-500 mt-1">
                   Subscriptions created via the vendor portal or payment gateway will appear here.
                 </p>
               </div>
@@ -431,11 +435,11 @@ export default function VendorSubscriptionsPage() {
           {/* ========================================================= */}
           {/* DESKTOP VIEW: SUBSCRIPTIONS DATA TABLE (Hidden on < md) */}
           {/* ========================================================= */}
-          <div className="hidden md:block rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
+          <div className="hidden md:block rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-slate-800 bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider">
                     <th className="py-3.5 px-4">Subscription ID</th>
                     <th className="py-3.5 px-4">Vendor Partner</th>
                     <th className="py-3.5 px-4">Location / Territory</th>
@@ -446,7 +450,7 @@ export default function VendorSubscriptionsPage() {
                     <th className="py-3.5 px-4 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-100">
                   {subscriptions.length > 0 ? (
                     subscriptions.map((sub) => {
                       const isPlatinum = sub.planTier?.toLowerCase() === "platinum";
@@ -461,34 +465,34 @@ export default function VendorSubscriptionsPage() {
                       return (
                         <tr
                           key={sub.id}
-                          className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                          className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
                           onClick={() => {
                             setSelectedSub(sub);
                             setIsDetailOpen(true);
                           }}
                         >
                           <td className="py-3.5 px-4">
-                            <span className="font-mono font-bold text-emerald-400">
+                            <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                               {sub.subscriptionId}
                             </span>
-                            <p className="text-[10px] text-slate-500 mt-0.5">
+                            <p className="text-[10px] text-slate-400 mt-1">
                               {formatDate(sub.createdAt)}
                             </p>
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <p className="font-bold text-white text-xs">{sub.vendorName}</p>
-                            <p className="text-slate-400 font-mono text-[11px]">{sub.vendorMobile}</p>
-                            <p className="text-[10px] text-slate-500 font-mono">{sub.applicationId}</p>
+                            <p className="font-bold text-slate-900 text-xs">{sub.vendorName}</p>
+                            <p className="text-slate-600 font-mono text-[11px]">{sub.vendorMobile}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{sub.applicationId}</p>
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <p className="font-semibold text-slate-200">{sub.city}</p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="font-semibold text-slate-800">{sub.city}</p>
+                            <p className="text-[11px] text-slate-500">
                               {sub.state || "India"}
                             </p>
                             {sub.territoryScope && (
-                              <p className="text-[10px] text-slate-500 truncate max-w-[140px]">
+                              <p className="text-[10px] text-slate-400 truncate max-w-[140px]">
                                 {sub.territoryScope}
                               </p>
                             )}
@@ -498,25 +502,25 @@ export default function VendorSubscriptionsPage() {
                             <span
                               className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                                 isPlatinum
-                                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                  ? "bg-purple-50 text-purple-700 border border-purple-200"
                                   : isGold
-                                  ? "bg-amber-400/20 text-amber-300 border border-amber-400/30"
-                                  : "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               }`}
                             >
                               {sub.planName || `${sub.planTier} Partner`}
                             </span>
-                            <p className="text-[10px] text-slate-400 mt-1">
+                            <p className="text-[10px] text-slate-500 mt-1">
                               {sub.hasExclusivity ? "Exclusivity Reserved" : (sub.billingCycle || "12 Mo Territory")}
                             </p>
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <span className="font-mono font-bold text-white text-xs">
+                            <span className="font-mono font-bold text-slate-900 text-xs">
                               ₹{sub.totalAmount ? Number(sub.totalAmount).toLocaleString("en-IN") : "0"}
                             </span>
                             {sub.gstAmount && Number(sub.gstAmount) > 0 && (
-                              <p className="text-[10px] text-slate-500 font-mono">
+                              <p className="text-[10px] text-slate-400 font-mono">
                                 Incl. GST ₹{Number(sub.gstAmount).toLocaleString("en-IN")}
                               </p>
                             )}
@@ -526,16 +530,16 @@ export default function VendorSubscriptionsPage() {
                             <span
                               className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                                 sub.paymentStatus === "PAID"
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : sub.paymentStatus === "FAILED"
-                                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                                  : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200"
                               }`}
                             >
                               {sub.paymentStatus || "PENDING"}
                             </span>
                             {sub.cfOrderId && (
-                              <p className="text-[10px] text-slate-500 font-mono truncate max-w-[110px] mt-0.5">
+                              <p className="text-[10px] text-slate-400 font-mono truncate max-w-[110px] mt-0.5">
                                 {sub.cfOrderId}
                               </p>
                             )}
@@ -547,14 +551,14 @@ export default function VendorSubscriptionsPage() {
                               onChange={(e) =>
                                 handleUpdateStatus(sub.id, e.target.value as SubscriptionStatus)
                               }
-                              className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border bg-slate-950 focus:outline-none cursor-pointer ${
+                              className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border bg-white focus:outline-none cursor-pointer ${
                                 sub.status === "active"
-                                  ? "text-emerald-400 border-emerald-500/40"
+                                  ? "text-emerald-700 border-emerald-300 bg-emerald-50"
                                   : sub.status === "pending"
-                                  ? "text-amber-400 border-amber-500/40"
+                                  ? "text-amber-700 border-amber-300 bg-amber-50"
                                   : sub.status === "expired"
-                                  ? "text-slate-400 border-slate-600"
-                                  : "text-rose-400 border-rose-500/40"
+                                  ? "text-slate-600 border-slate-200 bg-slate-50"
+                                  : "text-rose-700 border-rose-300 bg-rose-50"
                               }`}
                             >
                               <option value="active">Active</option>
@@ -573,7 +577,7 @@ export default function VendorSubscriptionsPage() {
                                 href={whatsAppUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-[#25D366]/20 text-slate-400 hover:text-[#25D366] transition-colors"
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-[#25D366]/20 text-slate-600 hover:text-[#25D366] transition-colors"
                                 title="Chat on WhatsApp"
                               >
                                 <MessageCircle className="w-4 h-4" />
@@ -583,7 +587,7 @@ export default function VendorSubscriptionsPage() {
                                   setSelectedSub(sub);
                                   setIsDetailOpen(true);
                                 }}
-                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors"
                                 title="View details"
                               >
                                 <ChevronRight className="w-4 h-4" />
@@ -596,9 +600,9 @@ export default function VendorSubscriptionsPage() {
                   ) : (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-slate-500">
-                        <CreditCard className="w-8 h-8 mx-auto mb-2 text-slate-600" />
-                        <p className="font-semibold">No vendor subscriptions found</p>
-                        <p className="text-[11px] text-slate-600 mt-1">
+                        <CreditCard className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                        <p className="font-semibold text-slate-800">No vendor subscriptions found</p>
+                        <p className="text-[11px] text-slate-500 mt-1">
                           Subscriptions created via the vendor portal or payment gateway will appear here.
                         </p>
                       </td>

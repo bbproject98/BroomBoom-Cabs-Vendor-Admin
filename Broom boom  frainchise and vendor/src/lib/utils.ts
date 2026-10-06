@@ -77,7 +77,7 @@ export function getWhatsAppLink(
   phone: string,
   applicantName: string,
   refId: string,
-  type: "Vendor" = "Vendor"
+  type: "Vendor" | "Franchise" | string = "Vendor"
 ): string {
   const clean = cleanPhoneNumber(phone);
 

@@ -45,6 +45,7 @@ export default function VendorPage() {
   // Leads State
   const [leads, setLeads] = useState<VendorLead[]>([]);
   const [subCount, setSubCount] = useState(0);
+  const [franchiseCount, setFranchiseCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -115,6 +116,13 @@ export default function VendorPage() {
       const subData = await subRes.json();
       if (subData.success && Array.isArray(subData.subscriptions)) {
         setSubCount(subData.subscriptions.length);
+      }
+
+      // Also get franchise count for sidebar
+      const fRes = await fetch("/api/franchise/leads");
+      const fData = await fRes.json();
+      if (fData.success && Array.isArray(fData.leads)) {
+        setFranchiseCount(fData.leads.length);
       }
     } catch (e) {
       console.error("Failed to load vendor leads:", e);
@@ -318,8 +326,9 @@ export default function VendorPage() {
   });
 
   return (
-    <div className="flex w-full min-h-screen bg-slate-950">
+    <div className="flex w-full min-h-screen bg-slate-50 text-slate-900">
       <Sidebar
+        franchiseCount={franchiseCount}
         vendorCount={totalCount}
         vendorSubCount={subCount}
         pendingTicketCount={pendingTicketCount}
@@ -338,13 +347,13 @@ export default function VendorPage() {
 
         <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-y-auto pb-24 lg:pb-8">
           {/* TOP TABS: Leads Desk vs Plan Upgrade Tickets */}
-          <div className="flex items-center gap-2 sm:gap-3 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 sm:gap-3 border-b border-slate-200 pb-3 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab("leads")}
               className={`shrink-0 flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeTab === "leads"
-                  ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
               }`}
             >
               <Users className="w-4 h-4" />
@@ -353,7 +362,7 @@ export default function VendorPage() {
                 className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
                   activeTab === "leads"
                     ? "bg-slate-950 text-emerald-400"
-                    : "bg-slate-800 text-slate-400"
+                    : "bg-slate-100 text-slate-600"
                 }`}
               >
                 {totalCount}
@@ -364,8 +373,8 @@ export default function VendorPage() {
               onClick={() => setActiveTab("tickets")}
               className={`shrink-0 flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeTab === "tickets"
-                  ? "bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                  ? "bg-amber-400 text-slate-950 shadow-sm"
+                  : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
               }`}
             >
               <Ticket className="w-4 h-4" />
@@ -379,7 +388,7 @@ export default function VendorPage() {
                   className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
                     activeTab === "tickets"
                       ? "bg-slate-950 text-amber-400"
-                      : "bg-slate-800 text-slate-400"
+                      : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {tickets.length}
@@ -393,37 +402,37 @@ export default function VendorPage() {
             <>
               {/* Summary Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                     Total Vendors
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-white mt-1">{totalCount}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{totalCount}</div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[11px] font-semibold text-blue-400 uppercase">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider block">
                     Pending Verification
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-blue-400 mt-1">{newCount}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{newCount}</div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[11px] font-semibold text-amber-400 uppercase">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider block">
                     Under Inspection
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-amber-400 mt-1">{contactedCount}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-amber-600 mt-1">{contactedCount}</div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[11px] font-semibold text-emerald-400 uppercase">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">
                     Active Fleet Attached
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-emerald-400 mt-1">{approvedCount}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-emerald-600 mt-1">{approvedCount}</div>
                 </div>
               </div>
 
               {/* Filter / Search Bar */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                 <form onSubmit={handleSearch} className="w-full lg:flex-1 min-w-[200px] relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -431,7 +440,7 @@ export default function VendorPage() {
                     placeholder="Search by vendor name, mobile, city, or application ID..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-sm"
                   />
                 </form>
 
@@ -439,7 +448,7 @@ export default function VendorPage() {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-emerald-400 font-medium"
+                    className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-emerald-500 font-medium shadow-sm"
                   >
                     <option value="all">All Statuses</option>
                     <option value="new">New Inquiry</option>
@@ -452,7 +461,7 @@ export default function VendorPage() {
                   <select
                     value={tierFilter}
                     onChange={(e) => setTierFilter(e.target.value)}
-                    className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-emerald-400 font-medium"
+                    className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-emerald-500 font-medium shadow-sm"
                   >
                     <option value="all">All Fleet Tiers</option>
                     <option value="silver">Silver Partner (1-3 Cabs)</option>
@@ -462,15 +471,15 @@ export default function VendorPage() {
 
                   <a
                     href="/api/export?type=vendor"
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-slate-700 transition-all"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200 transition-all shadow-sm"
                   >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Export CSV</span>
                   </a>
 
                   <button
                     onClick={() => setIsAddOpen(true)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-md shadow-emerald-500/10 transition-all"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add Vendor Lead</span>
@@ -500,12 +509,12 @@ export default function VendorPage() {
                           setSelectedLead(lead);
                           setIsDetailOpen(true);
                         }}
-                        className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 shadow-lg active:scale-[0.99] transition-all cursor-pointer"
+                        className="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-sm active:scale-[0.99] transition-all cursor-pointer"
                       >
                         {/* Top: Application ID, Date & Status Dropdown */}
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="font-mono font-bold text-emerald-400 text-xs">
+                            <span className="font-mono font-bold text-emerald-600 text-xs">
                               {lead.applicationId}
                             </span>
                             <p className="text-[10px] text-slate-500 mt-0.5">
@@ -519,16 +528,16 @@ export default function VendorPage() {
                               onChange={(e) =>
                                 handleUpdateStatus(lead.id, e.target.value as LeadStatus)
                               }
-                              className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-slate-950 focus:outline-none cursor-pointer ${
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-white focus:outline-none cursor-pointer ${
                                 lead.status === "approved"
-                                  ? "text-emerald-400 border-emerald-500/40"
+                                  ? "text-emerald-700 border-emerald-200 bg-emerald-50"
                                   : lead.status === "contacted"
-                                  ? "text-amber-400 border-amber-500/40"
+                                  ? "text-amber-700 border-amber-200 bg-amber-50"
                                   : lead.status === "review"
-                                  ? "text-purple-400 border-purple-500/40"
+                                  ? "text-purple-700 border-purple-200 bg-purple-50"
                                   : lead.status === "rejected"
-                                  ? "text-rose-400 border-rose-500/40"
-                                  : "text-blue-400 border-blue-500/40"
+                                  ? "text-rose-700 border-rose-200 bg-rose-50"
+                                  : "text-blue-700 border-blue-200 bg-blue-50"
                               }`}
                             >
                               <option value="new">New</option>
@@ -543,25 +552,25 @@ export default function VendorPage() {
                         {/* Vendor Name, Upgrade badge, Contact */}
                         <div>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="font-bold text-white text-sm">{lead.fullName}</p>
+                            <p className="font-bold text-slate-900 text-sm">{lead.fullName}</p>
                             {hasPendingTicket && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
                                 <Sparkles className="w-2.5 h-2.5" />
                                 Upgrade
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                          <div className="flex items-center gap-2 text-xs text-slate-600 mt-0.5">
                             <a
                               href={`tel:${lead.mobile}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="hover:text-emerald-400 font-mono"
+                              className="hover:text-emerald-600 font-mono"
                             >
                               {lead.mobile}
                             </a>
                             <span>•</span>
                             <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-slate-500" />
+                              <MapPin className="w-3 h-3 text-slate-400" />
                               {lead.city}{lead.state ? `, ${lead.state}` : ""}
                             </span>
                           </div>
@@ -573,19 +582,19 @@ export default function VendorPage() {
                         </div>
 
                         {/* Fleet Tier & Space Status */}
-                        <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                           <span
                             className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                               lead.preferredPackage === "platinum"
-                                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                ? "bg-purple-100 text-purple-700 border border-purple-200"
                                 : lead.preferredPackage === "gold"
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                : "bg-slate-700/50 text-slate-300 border border-slate-600"
+                                ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                : "bg-slate-100 text-slate-700 border border-slate-200"
                             }`}
                           >
                             {lead.preferredPackage} Partner
                           </span>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-[10px] text-slate-600">
                             {lead.spaceStatus || "Office Ready"}
                           </span>
                         </div>
@@ -598,7 +607,7 @@ export default function VendorPage() {
                           <div className="flex items-center gap-2">
                             <a
                               href={`tel:${lead.mobile}`}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold hover:bg-emerald-100"
                             >
                               <Phone className="w-3.5 h-3.5" />
                               <span>Call</span>
@@ -607,7 +616,7 @@ export default function VendorPage() {
                               href={whatsApp}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 text-xs font-semibold"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/20 text-xs font-semibold hover:bg-[#25D366]/20"
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
                               <span>WhatsApp</span>
@@ -619,7 +628,7 @@ export default function VendorPage() {
                               setSelectedLead(lead);
                               setIsDetailOpen(true);
                             }}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs font-semibold hover:bg-slate-700"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200"
                           >
                             <span>Manage</span>
                             <ChevronRight className="w-3.5 h-3.5" />
@@ -629,18 +638,18 @@ export default function VendorPage() {
                     );
                   })
                 ) : (
-                  <div className="py-12 text-center text-slate-500 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                  <div className="py-12 text-center text-slate-500 bg-white border border-slate-200 rounded-2xl p-6">
                     {loading ? "Loading vendor leads..." : "No vendor leads match your criteria."}
                   </div>
                 )}
               </div>
 
               {/* Leads Table */}
-              <div className="hidden md:block rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
+              <div className="hidden md:block rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-800 bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
+                      <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider">
                         <th className="py-3 px-4">Application</th>
                         <th className="py-3 px-4">Vendor &amp; Contact</th>
                         <th className="py-3 px-4">Base City</th>
@@ -650,7 +659,7 @@ export default function VendorPage() {
                         <th className="py-3 px-4 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody className="divide-y divide-slate-100">
                       {leads.length > 0 ? (
                         leads.map((lead) => {
                           const whatsApp = getWhatsAppLink(
@@ -666,14 +675,14 @@ export default function VendorPage() {
                           return (
                             <tr
                               key={lead.id}
-                              className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                              className="hover:bg-slate-50 transition-colors group cursor-pointer"
                               onClick={() => {
                                 setSelectedLead(lead);
                                 setIsDetailOpen(true);
                               }}
                             >
                               <td className="py-3.5 px-4">
-                                <span className="font-mono font-bold text-emerald-400">
+                                <span className="font-mono font-bold text-emerald-600">
                                   {lead.applicationId}
                                 </span>
                                 <p className="text-[10px] text-slate-500 mt-0.5">
@@ -683,10 +692,10 @@ export default function VendorPage() {
 
                               <td className="py-3.5 px-4">
                                 <div className="flex items-center gap-1.5">
-                                  <p className="font-bold text-white text-xs">{lead.fullName}</p>
+                                  <p className="font-bold text-slate-900 text-xs">{lead.fullName}</p>
                                   {hasPendingTicket && (
                                     <span
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse"
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"
                                       title="Vendor requested a plan upgrade!"
                                     >
                                       <Sparkles className="w-2.5 h-2.5" />
@@ -694,7 +703,7 @@ export default function VendorPage() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-slate-400">{lead.mobile}</p>
+                                <p className="text-slate-600">{lead.mobile}</p>
                                 {lead.email && (
                                   <p className="text-[11px] text-slate-500 truncate max-w-[150px]">
                                     {lead.email}
@@ -703,8 +712,8 @@ export default function VendorPage() {
                               </td>
 
                               <td className="py-3.5 px-4">
-                                <p className="font-semibold text-slate-200">{lead.city}</p>
-                                <p className="text-[11px] text-slate-400">
+                                <p className="font-semibold text-slate-800">{lead.city}</p>
+                                <p className="text-[11px] text-slate-500">
                                   {lead.state || "—"}
                                 </p>
                               </td>
@@ -713,15 +722,15 @@ export default function VendorPage() {
                                 <span
                                   className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                                     lead.preferredPackage === "platinum"
-                                      ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                      ? "bg-purple-100 text-purple-700 border border-purple-200"
                                       : lead.preferredPackage === "gold"
-                                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                      : "bg-slate-700/50 text-slate-300 border border-slate-600"
+                                      ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                      : "bg-slate-100 text-slate-700 border border-slate-200"
                                   }`}
                                 >
                                   {lead.preferredPackage} Partner
                                 </span>
-                                <p className="text-[11px] text-slate-400 mt-1">
+                                <p className="text-[11px] text-slate-500 mt-1">
                                   {lead.spaceStatus || "Office Ready"}
                                 </p>
                               </td>
@@ -732,16 +741,16 @@ export default function VendorPage() {
                                   onChange={(e) =>
                                     handleUpdateStatus(lead.id, e.target.value as LeadStatus)
                                   }
-                                  className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border bg-slate-950 focus:outline-none cursor-pointer ${
+                                  className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border bg-white focus:outline-none cursor-pointer ${
                                     lead.status === "approved"
-                                      ? "text-emerald-400 border-emerald-500/40"
+                                      ? "text-emerald-700 border-emerald-200 bg-emerald-50"
                                       : lead.status === "contacted"
-                                      ? "text-amber-400 border-amber-500/40"
+                                      ? "text-amber-700 border-amber-200 bg-amber-50"
                                       : lead.status === "review"
-                                      ? "text-purple-400 border-purple-500/40"
+                                      ? "text-purple-700 border-purple-200 bg-purple-50"
                                       : lead.status === "rejected"
-                                      ? "text-rose-400 border-rose-500/40"
-                                      : "text-blue-400 border-blue-500/40"
+                                      ? "text-rose-700 border-rose-200 bg-rose-50"
+                                      : "text-blue-700 border-blue-200 bg-blue-50"
                                   }`}
                                 >
                                   <option value="new">New</option>
@@ -756,7 +765,7 @@ export default function VendorPage() {
                                 <div className="flex items-center justify-end gap-1.5">
                                   <a
                                     href={`tel:${lead.mobile}`}
-                                    className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all"
+                                    className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all"
                                     title={`Call ${lead.mobile}`}
                                   >
                                     <Phone className="w-3.5 h-3.5" />
@@ -765,7 +774,7 @@ export default function VendorPage() {
                                     href={whatsApp}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="p-1.5 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-slate-950 transition-all"
+                                    className="p-1.5 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-all"
                                     title="Chat on WhatsApp"
                                   >
                                     <MessageCircle className="w-3.5 h-3.5" />
@@ -779,7 +788,7 @@ export default function VendorPage() {
                                     setSelectedLead(lead);
                                     setIsDetailOpen(true);
                                   }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-emerald-400 hover:text-slate-950 text-slate-300 font-semibold text-[11px] transition-all"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 font-semibold text-[11px] transition-all"
                                 >
                                   <span>Manage</span>
                                   <ChevronRight className="w-3 h-3" />
@@ -807,55 +816,55 @@ export default function VendorPage() {
             <>
               {/* Tickets KPI Cards (1-Step Verification Lifecycle) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                     Total Requests
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-white mt-1">{ticketCounts.total || tickets.length}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">{ticketCounts.total || tickets.length}</div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-amber-500/20">
-                  <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-amber-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
                     <span>Pending Verification</span>
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-amber-400 mt-1 flex items-center gap-2">
+                  <div className="text-xl sm:text-2xl font-bold text-amber-700 mt-1 flex items-center gap-2">
                     <span>
                       {(ticketCounts.pending || 0) +
                         (ticketCounts.paymentCompleted || 0) +
                         (ticketCounts.awaitingPayment || 0)}
                     </span>
                     {(ticketCounts.paymentCompleted || 0) > 0 && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 font-bold border border-emerald-400/30">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
                         {ticketCounts.paymentCompleted} Paid
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-emerald-500/30 bg-emerald-500/5">
-                  <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-emerald-200 bg-emerald-50/50 shadow-sm">
+                  <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Active Upgraded</span>
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-emerald-300 mt-1">
+                  <div className="text-xl sm:text-2xl font-bold text-emerald-700 mt-1">
                     {ticketCounts.approved}
                   </div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
                     <span>Rejected Requests</span>
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-slate-400 mt-1">
+                  <div className="text-xl sm:text-2xl font-bold text-slate-700 mt-1">
                     {ticketCounts.rejected}
                   </div>
                 </div>
               </div>
 
               {/* Tickets Search & Filter */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3 sm:gap-4 shadow-sm">
                 <div className="w-full sm:flex-1 min-w-[200px] relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -863,7 +872,7 @@ export default function VendorPage() {
                     placeholder="Search by ticket ID, vendor name, mobile, or application ID..."
                     value={ticketSearchQuery}
                     onChange={(e) => setTicketSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500"
                   />
                 </div>
 
@@ -871,7 +880,7 @@ export default function VendorPage() {
                   <select
                     value={ticketStatusFilter}
                     onChange={(e) => setTicketStatusFilter(e.target.value)}
-                    className="w-full sm:w-auto px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-amber-400 font-medium"
+                    className="w-full sm:w-auto px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:border-amber-500 font-medium"
                   >
                     <option value="all">All Ticket Statuses</option>
                     <option value="pending_all">Pending Verification &amp; Issue Login</option>
@@ -905,20 +914,20 @@ export default function VendorPage() {
                     return (
                       <div
                         key={t.id || t.ticketId}
-                        className={`p-4 rounded-2xl border space-y-3 shadow-lg ${
+                        className={`p-4 rounded-2xl border space-y-3 shadow-sm ${
                           isPending
-                            ? "bg-slate-900 border-amber-500/30"
+                            ? "bg-white border-amber-300"
                             : isPaymentCompleted
-                            ? "bg-slate-900 border-emerald-500/40 shadow-emerald-500/5"
+                            ? "bg-white border-emerald-300 shadow-emerald-500/5"
                             : isApproved
-                            ? "bg-slate-900 border-emerald-500/20"
-                            : "bg-slate-900 border-slate-800"
+                            ? "bg-white border-emerald-200"
+                            : "bg-white border-slate-200"
                         }`}
                       >
                         {/* Top: Ticket ID, Date & Status */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-white text-xs">
+                            <span className="font-mono font-bold text-slate-900 text-xs">
                               #{t.ticketId}
                             </span>
                             <span className="text-[10px] text-slate-500">
@@ -928,21 +937,21 @@ export default function VendorPage() {
 
                           <div>
                             {isApproved ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                 <CheckCircle2 className="w-2.5 h-2.5" />
                                 <span>Upgraded</span>
                               </span>
                             ) : isPaymentCompleted ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
-                                <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
                                 <span>Paid: Ready</span>
                               </span>
                             ) : isRejected ? (
-                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-200">
                                 Rejected
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                 <Clock className="w-2.5 h-2.5" />
                                 <span>Pending</span>
                               </span>
@@ -952,42 +961,42 @@ export default function VendorPage() {
 
                         {/* Vendor Name & Application */}
                         <div>
-                          <p className="font-bold text-white text-sm">{t.vendorName}</p>
-                          <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                            <a href={`tel:${t.vendorMobile}`} className="hover:text-emerald-400 font-mono">
+                          <p className="font-bold text-slate-900 text-sm">{t.vendorName}</p>
+                          <div className="flex items-center gap-2 text-xs text-slate-600 mt-0.5">
+                            <a href={`tel:${t.vendorMobile}`} className="hover:text-emerald-600 font-mono">
                               {t.vendorMobile}
                             </a>
                             <span>•</span>
-                            <span className="font-mono text-emerald-400 text-[11px]">
+                            <span className="font-mono text-emerald-700 text-[11px] font-semibold">
                               {t.applicationId}
                             </span>
                           </div>
                         </div>
 
                         {/* Plan Transition & Fee */}
-                        <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                           <div>
                             <span className="text-[10px] text-slate-500 block uppercase font-medium">Plan Upgrade</span>
                             <div className="flex items-center gap-1.5 font-bold mt-0.5">
-                              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] uppercase">
+                              <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] uppercase">
                                 {t.currentPlan}
                               </span>
-                              <ArrowRight className="w-3 h-3 text-amber-400" />
-                              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] uppercase font-bold">
+                              <ArrowRight className="w-3 h-3 text-amber-500" />
+                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] uppercase font-bold">
                                 {t.requestedPlan}
                               </span>
                             </div>
                           </div>
 
                           <div className="text-right">
-                            <span className="font-mono font-bold text-white text-sm block">
+                            <span className="font-mono font-bold text-slate-900 text-sm block">
                               ₹{fee.totalAmount.toLocaleString("en-IN")}
                             </span>
                             <span
                               className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
                                 t.paymentStatus === "PAID"
-                                  ? "bg-emerald-500/20 text-emerald-300"
-                                  : "bg-slate-800 text-slate-400"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-200 text-slate-700"
                               }`}
                             >
                               {t.paymentStatus || "UNPAID"}
@@ -996,22 +1005,22 @@ export default function VendorPage() {
                         </div>
 
                         {t.reason && (
-                          <p className="text-slate-400 italic text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
+                          <p className="text-slate-600 italic text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                             &ldquo;{t.reason}&rdquo;
                           </p>
                         )}
 
                         {/* Upgraded Login details if generated */}
                         {isApproved && t.newUserId && (
-                          <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-xs font-mono space-y-1">
+                          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-mono space-y-1">
                             <div className="flex justify-between items-center">
-                              <span className="text-slate-400 text-[10px]">User ID:</span>
-                              <span className="text-emerald-300 font-bold">{t.newUserId}</span>
+                              <span className="text-slate-600 text-[10px]">User ID:</span>
+                              <span className="text-emerald-700 font-bold">{t.newUserId}</span>
                             </div>
                             {t.newPassword && (
                               <div className="flex justify-between items-center">
-                                <span className="text-slate-400 text-[10px]">Password:</span>
-                                <span className="text-white font-bold">{t.newPassword}</span>
+                                <span className="text-slate-600 text-[10px]">Password:</span>
+                                <span className="text-slate-900 font-bold">{t.newPassword}</span>
                               </div>
                             )}
                           </div>
@@ -1034,7 +1043,7 @@ export default function VendorPage() {
                                 onClick={() =>
                                   setActionTicket({ ticket: t, type: "reject" })
                                 }
-                                className="py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold text-xs transition-all cursor-pointer"
+                                className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition-all cursor-pointer"
                               >
                                 Reject
                               </button>
@@ -1072,7 +1081,7 @@ export default function VendorPage() {
                                     alert(`Vendor profile for ${t.applicationId} not found.`);
                                   }
                                 }}
-                                className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer text-xs flex items-center gap-1 font-medium"
+                                className="p-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all cursor-pointer text-xs flex items-center gap-1 font-medium"
                               >
                                 <span>Profile</span>
                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -1084,18 +1093,18 @@ export default function VendorPage() {
                     );
                   })
                 ) : (
-                  <div className="py-12 text-center text-slate-500 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                  <div className="py-12 text-center text-slate-500 bg-white border border-slate-200 rounded-2xl p-6">
                     {loadingTickets ? "Loading upgrade tickets..." : "No upgrade tickets found."}
                   </div>
                 )}
               </div>
 
               {/* Tickets Table */}
-              <div className="hidden md:block rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
+              <div className="hidden md:block rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-800 bg-slate-800/40 text-slate-400 font-semibold uppercase tracking-wider">
+                      <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider">
                         <th className="py-3 px-4">Ticket</th>
                         <th className="py-3 px-4">Vendor &amp; Contact</th>
                         <th className="py-3 px-4">Plan Transition</th>
@@ -1105,7 +1114,7 @@ export default function VendorPage() {
                         <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody className="divide-y divide-slate-100">
                       {filteredTickets.length > 0 ? (
                         filteredTickets.map((t) => {
                           const statusUpper = (t.status || "").toUpperCase();
@@ -1125,9 +1134,9 @@ export default function VendorPage() {
                             : calculateUpgradeFees(t.currentPlan, t.requestedPlan);
 
                           return (
-                            <tr key={t.id || t.ticketId} className="hover:bg-slate-800/30 transition-colors">
+                            <tr key={t.id || t.ticketId} className="hover:bg-slate-50/70 transition-colors">
                               <td className="py-3.5 px-4">
-                                <span className="font-mono font-bold text-white text-xs">
+                                <span className="font-mono font-bold text-slate-900 text-xs">
                                   #{t.ticketId}
                                 </span>
                                 <p className="text-[10px] text-slate-500 mt-0.5">
@@ -1136,40 +1145,40 @@ export default function VendorPage() {
                               </td>
 
                               <td className="py-3.5 px-4">
-                                <p className="font-bold text-white text-xs">{t.vendorName}</p>
-                                <p className="text-slate-400">{t.vendorMobile}</p>
-                                <span className="text-[10px] font-mono text-emerald-400">
+                                <p className="font-bold text-slate-900 text-xs">{t.vendorName}</p>
+                                <p className="text-slate-600">{t.vendorMobile}</p>
+                                <span className="text-[10px] font-mono text-emerald-700 font-semibold">
                                   {t.applicationId}
                                 </span>
                               </td>
 
                               <td className="py-3.5 px-4">
                                 <div className="flex items-center gap-1.5 font-bold">
-                                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] uppercase">
+                                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] uppercase">
                                     {t.currentPlan}
                                   </span>
-                                  <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-                                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] uppercase font-bold">
+                                  <ArrowRight className="w-3.5 h-3.5 text-amber-500" />
+                                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] uppercase font-bold">
                                     {t.requestedPlan}
                                   </span>
                                 </div>
                                 {t.reason && (
-                                  <p className="italic text-[10px] text-slate-400 truncate max-w-[170px] mt-1" title={t.reason}>
+                                  <p className="italic text-[10px] text-slate-500 truncate max-w-[170px] mt-1" title={t.reason}>
                                     &ldquo;{t.reason}&rdquo;
                                   </p>
                                 )}
                               </td>
 
                               <td className="py-3.5 px-4">
-                                <div className="font-mono font-bold text-white text-xs">
+                                <div className="font-mono font-bold text-slate-900 text-xs">
                                   ₹{fee.totalAmount.toLocaleString("en-IN")}
                                 </div>
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   <span
                                     className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
                                       t.paymentStatus === "PAID"
-                                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                        : "bg-slate-800 text-slate-400"
+                                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                        : "bg-slate-100 text-slate-600"
                                     }`}
                                   >
                                     {t.paymentStatus || "UNPAID"}
@@ -1184,21 +1193,21 @@ export default function VendorPage() {
 
                               <td className="py-3.5 px-4">
                                 {isApproved ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                     <CheckCircle2 className="w-3 h-3" />
                                     <span>Upgraded &amp; Active</span>
                                   </span>
                                 ) : isPaymentCompleted ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse shadow-sm shadow-emerald-500/20">
-                                    <Sparkles className="w-3 h-3 text-emerald-400" />
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse shadow-sm">
+                                    <Sparkles className="w-3 h-3 text-emerald-600" />
                                     <span>Paid: Ready to Issue Login</span>
                                   </span>
                                 ) : isRejected ? (
-                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
                                     Rejected
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                     <Clock className="w-3 h-3" />
                                     <span>Pending Verification</span>
                                   </span>
@@ -1208,17 +1217,17 @@ export default function VendorPage() {
                               <td className="py-3.5 px-4">
                                 {isApproved && t.newUserId ? (
                                   <div className="font-mono text-[11px]">
-                                    <div className="text-emerald-400 font-bold">{t.newUserId}</div>
-                                    <div className="text-slate-400 text-[10px]">
+                                    <div className="text-emerald-700 font-bold">{t.newUserId}</div>
+                                    <div className="text-slate-600 text-[10px]">
                                       Pwd: {t.newPassword}
                                     </div>
                                   </div>
                                 ) : isPaymentCompleted ? (
-                                  <div className="text-[10px] text-emerald-400 font-mono">
+                                  <div className="text-[10px] text-emerald-700 font-mono font-semibold">
                                     Ready to generate
                                   </div>
                                 ) : (
-                                  <span className="text-slate-500 text-[11px]">—</span>
+                                  <span className="text-slate-400 text-[11px]">—</span>
                                 )}
                               </td>
 
@@ -1241,7 +1250,7 @@ export default function VendorPage() {
                                         onClick={() =>
                                           setActionTicket({ ticket: t, type: "reject" })
                                         }
-                                        className="px-2 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold text-[11px] transition-all cursor-pointer"
+                                        className="px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[11px] transition-all cursor-pointer"
                                         title="Reject request"
                                       >
                                         Reject
@@ -1283,7 +1292,7 @@ export default function VendorPage() {
                                         alert(`Vendor profile for ${t.applicationId} not found in current list.`);
                                       }
                                     }}
-                                    className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+                                    className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition-all cursor-pointer"
                                     title="View full vendor profile"
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" />
@@ -1340,49 +1349,49 @@ export default function VendorPage() {
         const previewPassword = `BroomBoom@${reqTierUpper}2026`;
 
         return (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md">
-            <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   {actionTicket.type === "reject" ? (
                     <>
-                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                      <AlertCircle className="w-4 h-4 text-rose-500" />
                       <span>Reject Plan Change Ticket</span>
                     </>
                   ) : (
                     <>
-                      <Key className="w-4 h-4 text-emerald-400" />
+                      <Key className="w-4 h-4 text-emerald-600" />
                       <span>1-Step Approval: Verify Payment &amp; Issue Upgraded Login</span>
                     </>
                   )}
                 </h3>
                 <button
                   onClick={() => setActionTicket(null)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-slate-400 hover:text-slate-700"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Common Ticket Details */}
-              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
-                <div className="text-slate-400">
-                  Ticket: <span className="text-white font-mono font-bold">#{t.ticketId}</span>
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                <div className="text-slate-500">
+                  Ticket: <span className="text-slate-900 font-mono font-bold">#{t.ticketId}</span>
                 </div>
-                <div className="text-slate-400">
-                  Vendor: <span className="text-white font-bold">{t.vendorName}</span> ({t.vendorMobile})
+                <div className="text-slate-500">
+                  Vendor: <span className="text-slate-900 font-bold">{t.vendorName}</span> ({t.vendorMobile})
                 </div>
-                <div className="text-slate-400">
-                  Application: <span className="text-emerald-400 font-mono">{t.applicationId}</span>
+                <div className="text-slate-500">
+                  Application: <span className="text-emerald-700 font-mono font-bold">{t.applicationId}</span>
                 </div>
                 <div className="flex items-center gap-2 pt-1 font-semibold">
-                  <span className="text-slate-400">Plan Change:</span>
-                  <span className="text-slate-300 font-bold uppercase">{t.currentPlan}</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-emerald-400 font-bold uppercase">{t.requestedPlan}</span>
+                  <span className="text-slate-500">Plan Change:</span>
+                  <span className="text-slate-700 font-bold uppercase">{t.currentPlan}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-emerald-700 font-bold uppercase">{t.requestedPlan}</span>
                 </div>
                 {t.reason && (
-                  <div className="pt-1 text-slate-300 italic text-[11px]">
+                  <div className="pt-1 text-slate-600 italic text-[11px]">
                     Reason: &ldquo;{t.reason}&rdquo;
                   </div>
                 )}
@@ -1391,49 +1400,49 @@ export default function VendorPage() {
               {/* 1-Step Approval: Fee & Credentials Preview */}
               {actionTicket.type !== "reject" && (
                 <div className="space-y-3">
-                  <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60 text-xs space-y-1.5 font-mono">
-                    <div className="flex justify-between text-slate-400">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 font-mono">
+                    <div className="flex justify-between text-slate-500">
                       <span>New Plan Value:</span>
-                      <span className="text-white font-semibold">₹{feeCalc.upgradeAmount.toLocaleString("en-IN")}</span>
+                      <span className="text-slate-900 font-semibold">₹{feeCalc.upgradeAmount.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between text-slate-400">
+                    <div className="flex justify-between text-slate-500">
                       <span>Gateway Fee (3%) + GST (5%):</span>
-                      <span className="text-white">₹{(feeCalc.gatewayFee + feeCalc.gstAmount).toLocaleString("en-IN")}</span>
+                      <span className="text-slate-900">₹{(feeCalc.gatewayFee + feeCalc.gstAmount).toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-700 font-bold text-emerald-400 text-sm">
+                    <div className="flex justify-between pt-1 border-t border-slate-200 font-bold text-emerald-700 text-sm">
                       <span>Total Upgrade Fee:</span>
                       <span>₹{totalPayable.toLocaleString("en-IN")} {t.paymentStatus === "PAID" ? "(PAID)" : ""}</span>
                     </div>
                     {t.paymentId && (
-                      <div className="flex justify-between text-slate-400 pt-1">
+                      <div className="flex justify-between text-slate-500 pt-1">
                         <span>Payment Ref:</span>
-                        <span className="text-white font-mono">{t.paymentId}</span>
+                        <span className="text-slate-900 font-mono">{t.paymentId}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-xs space-y-1.5">
-                    <span className="text-emerald-400 font-bold block text-[11px] uppercase tracking-wider">
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs space-y-1.5">
+                    <span className="text-emerald-800 font-bold block text-[11px] uppercase tracking-wider">
                       Upgraded Credentials To Be Issued:
                     </span>
                     <div className="flex justify-between font-mono">
-                      <span className="text-slate-400">User ID:</span>
-                      <span className="text-emerald-300 font-bold">{previewUserId}</span>
+                      <span className="text-slate-600">User ID:</span>
+                      <span className="text-emerald-800 font-bold">{previewUserId}</span>
                     </div>
                     <div className="flex justify-between font-mono">
-                      <span className="text-slate-400">Password:</span>
-                      <span className="text-white font-bold">{previewPassword}</span>
+                      <span className="text-slate-600">Password:</span>
+                      <span className="text-slate-900 font-bold">{previewPassword}</span>
                     </div>
                   </div>
 
-                  <label className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs cursor-pointer">
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs cursor-pointer">
                     <input
                       type="checkbox"
                       checked={actionPaymentConfirmed}
                       onChange={(e) => setActionPaymentConfirmed(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-400"
+                      className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
-                    <span className="text-emerald-200">
+                    <span className="text-emerald-900">
                       <strong>Payment &amp; Ticket Verified:</strong> I verify the upgrade request and payment of ₹{totalPayable.toLocaleString("en-IN")}. Authorize immediate upgrade and credential activation.
                     </span>
                   </label>
@@ -1441,7 +1450,7 @@ export default function VendorPage() {
               )}
 
               <div>
-                <label className="text-xs text-slate-400 block mb-1">
+                <label className="text-xs text-slate-600 block mb-1">
                   Admin Remarks (Optional):
                 </label>
                 <textarea
@@ -1449,14 +1458,14 @@ export default function VendorPage() {
                   onChange={(e) => setActionNotes(e.target.value)}
                   placeholder="e.g., Fleet verification completed, territory exclusivity updated..."
                   rows={2}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
                   onClick={() => setActionTicket(null)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1487,34 +1496,34 @@ export default function VendorPage() {
 
       {/* Upgraded Credentials Generated Success Modal */}
       {approvedCredsModal && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="w-full max-w-md bg-slate-900 border border-emerald-500/40 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                <Sparkles className="w-5 h-5" />
-                <span>Plan Upgrade Approved & Credentials Ready!</span>
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white border border-emerald-300 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                <Sparkles className="w-5 h-5 text-emerald-600" />
+                <span>Plan Upgrade Approved &amp; Credentials Ready!</span>
               </div>
               <button
                 onClick={() => setApprovedCredsModal(null)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-300">
-              Vendor <strong className="text-white">{approvedCredsModal.ticket.vendorName}</strong> has been upgraded to{" "}
-              <strong className="text-emerald-400 uppercase">{approvedCredsModal.ticket.requestedPlan} Partner</strong>. New login credentials have been generated:
+            <p className="text-xs text-slate-600">
+              Vendor <strong className="text-slate-900">{approvedCredsModal.ticket.vendorName}</strong> has been upgraded to{" "}
+              <strong className="text-emerald-700 uppercase">{approvedCredsModal.ticket.requestedPlan} Partner</strong>. New login credentials have been generated:
             </p>
 
-            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 font-mono text-xs">
               <div className="flex justify-between items-center">
-                <span className="text-slate-400 text-[11px]">User ID:</span>
-                <span className="font-bold text-emerald-400">{approvedCredsModal.userId}</span>
+                <span className="text-slate-500 text-[11px]">User ID:</span>
+                <span className="font-bold text-emerald-700">{approvedCredsModal.userId}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400 text-[11px]">Password:</span>
-                <span className="font-bold text-white">{approvedCredsModal.password}</span>
+                <span className="text-slate-500 text-[11px]">Password:</span>
+                <span className="font-bold text-slate-900">{approvedCredsModal.password}</span>
               </div>
             </div>
 
@@ -1543,10 +1552,10 @@ export default function VendorPage() {
                   setCopiedSuccessCred(true);
                   setTimeout(() => setCopiedSuccessCred(false), 2000);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200 transition-all"
               >
                 {copiedSuccessCred ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
                 )}
