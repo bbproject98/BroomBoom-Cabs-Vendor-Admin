@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import {
   FranchiseLead,
+  PackageTier,
   VendorLead,
   LeadStatus,
   VendorSubscription,
@@ -258,6 +259,7 @@ function readLocalStore(): LocalStoreState {
   try {
     const raw = fs.readFileSync(LOCAL_STORE_FILE, "utf-8");
     const parsed = JSON.parse(raw);
+    if (!parsed.franchiseLeads) parsed.franchiseLeads = [];
     if (!parsed.vendorSubscriptions) parsed.vendorSubscriptions = [];
     if (!parsed.tickets) parsed.tickets = [];
     if (!parsed.vendorUsers) parsed.vendorUsers = [];
@@ -346,7 +348,7 @@ export function syncSiblingLandingPageStores(): { franchiseCount: number; vendor
   return { franchiseCount, vendorCount };
 }
 
-// Franchise Leads DB Operations
+// Franchise & Vendor Admin DB Operations
 export const adminDb = {
   franchise: {
     async getAll(filters?: {
