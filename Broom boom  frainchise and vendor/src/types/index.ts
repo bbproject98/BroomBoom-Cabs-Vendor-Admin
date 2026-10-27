@@ -2,10 +2,14 @@
 
 export type LeadStatus =
   | "new"
+  | "pending"
+  | "in_progress"
+  | "approved"
   | "contacted"
   | "review"
-  | "approved"
-  | "rejected";
+  | "rejected"
+  | "payment_pending"
+  | "payment_completed";
 
 export type PackageTier =
   | "silver"
@@ -255,4 +259,55 @@ export interface DashboardStats {
     status: LeadStatus;
     timestamp: string;
   }[];
+}
+
+export type ActivityActionType =
+  | "UPDATE"
+  | "DELETE"
+  | "APPROVE"
+  | "REJECT"
+  | "STATUS_CHANGE"
+  | "PAYMENT_RECORDED"
+  | "CREDENTIALS_GENERATED"
+  | "CREDENTIALS_RESET"
+  | "CREDENTIALS_UPDATED"
+  | "TICKET_APPROVED"
+  | "TICKET_REJECTED"
+  | "LEAD_CREATED";
+
+export interface AdminActivityLog {
+  id: string;
+  adminName: string;
+  actionType: ActivityActionType | string;
+  entityType: "vendor" | "franchise" | "subscription" | "ticket" | "credential" | string;
+  entityId: string;
+  personName?: string;
+  personPhone?: string;
+  title: string;
+  details?: string;
+  createdAt: string;
+}
+
+export interface ProfileActivityGroup {
+  entityId: string;
+  entityType: string;
+  personName: string;
+  personPhone: string;
+  city?: string;
+  state?: string;
+  planTier?: string;
+  status?: string;
+  profileLink?: string;
+  activities: AdminActivityLog[];
+  lastActivityAt: string;
+}
+
+export interface ManualPaymentPayload {
+  applicationId: string;
+  amount: number;
+  paymentMode: "Cash" | "Bank Transfer (NEFT/RTGS/IMPS)" | "UPI / QR Code" | "Cheque / DD" | string;
+  paymentReference: string;
+  paymentDate?: string;
+  notes?: string;
+  setApproved?: boolean; // if true, approves immediately and issues credentials
 }

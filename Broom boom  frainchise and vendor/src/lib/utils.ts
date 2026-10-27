@@ -115,7 +115,7 @@ export function getCredentialsWhatsAppLink(
       `Welcome to the BroomBoom Vendor & Fleet Partner Network! 🚖\n\n` +
       `Your Vendor Dashboard access has been activated for Application ID: ${applicationId} (${plan.toUpperCase()} Partner).\n\n` +
       `🔐 Your Vendor Portal Login Details:\n` +
-      `• Login URL: ${portalUrl}/vendor/login\n` +
+      `• Login URL: ${portalUrl}/vendor/login?appId=${encodeURIComponent(userId)}\n` +
       `• User ID: ${userId}\n` +
       `• Password: ${password}\n\n` +
       `Log in to view your Territory Agreement, Fleet Allocation, Onboarding Milestones, and raise Plan Upgrade tickets anytime.\n\n` +
@@ -150,7 +150,7 @@ export function getUpgradeCredentialsWhatsAppLink(
       `🎉 Great News! Your Plan Upgrade to ${newPlan.toUpperCase()} PARTNER has been APPROVED & ACTIVATED!\n\n` +
       `Your Application Ref: ${applicationId}\n\n` +
       `🔐 Your New Upgraded Login Credentials:\n` +
-      `• Login URL: ${portalUrl}/vendor/login\n` +
+      `• Login URL: ${portalUrl}/vendor/login?appId=${encodeURIComponent(newUserId)}\n` +
       `• Upgraded User ID: ${newUserId}\n` +
       `• Upgraded Password: ${newPassword}\n\n` +
       `Please log in using these upgraded credentials to access your new fleet tiers, exclusive benefits, and updated partner conditions.\n\n` +

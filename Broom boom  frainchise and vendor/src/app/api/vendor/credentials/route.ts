@@ -41,6 +41,10 @@ export async function POST(request: Request) {
       tier,
       preferredPackage,
       customPassword,
+      userId,
+      password,
+      saveCustom,
+      reset,
     } = body;
 
     if (!applicationId) {
@@ -72,7 +76,24 @@ export async function POST(request: Request) {
       resolvedTier = "silver";
     }
 
-    const user = await adminDb.vendorUser.generateCredentials(
+    let user;
+    // If admin explicitly provided custom credentials to save (and it's not a reset request)
+    if (!reset && (saveCustom || (userId && password))) {
+      user = await adminDb.vendorUser.saveCredentials(
+        applicationId,
+        userId,
+        password,
+        resolvedTier
+      );
+      return NextResponse.json({
+        success: true,
+        message: `Custom login credentials for ${applicationId} saved successfully.`,
+        user,
+      });
+    }
+
+    // Otherwise generate / regenerate standard credentials
+    user = await adminDb.vendorUser.generateCredentials(
       applicationId,
       resolvedTier,
       customPassword
@@ -86,7 +107,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("[API ERROR /api/vendor/credentials POST]", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to generate credentials" },
+      { success: false, error: error.message || "Failed to process credentials" },
       { status: 500 }
     );
   }

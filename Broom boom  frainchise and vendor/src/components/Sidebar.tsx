@@ -13,6 +13,7 @@ import {
   Users,
   CreditCard,
   Ticket,
+  Activity,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -247,6 +248,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
+
+      {/* Admin Activity Logs */}
+      <Link
+        href="/activity"
+        onClick={() => isMobileDrawer && onCloseMobile?.()}
+        className={cn(
+          "flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group",
+          pathname === "/activity"
+            ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <Activity
+            className={cn(
+              "w-4 h-4 transition-colors",
+              pathname === "/activity"
+                ? "text-slate-950"
+                : "text-slate-400 group-hover:text-emerald-600"
+            )}
+          />
+          <span>Activity Logs</span>
+        </div>
+      </Link>
 
       {/* Settings */}
       <Link

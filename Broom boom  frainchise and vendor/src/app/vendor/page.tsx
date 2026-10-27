@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { VendorDetailModal } from "@/components/VendorDetailModal";
@@ -28,6 +30,7 @@ import {
   CheckCircle2,
   Clock,
   MapPin,
+  History,
 } from "lucide-react";
 import { VendorLead, LeadStatus, PlanChangeTicket } from "@/types";
 import {
@@ -39,6 +42,10 @@ import {
 } from "@/lib/utils";
 
 export default function VendorPage() {
+  const router = useRouter();
+  const portalUrl =
+    process.env.NEXT_PUBLIC_VENDOR_PORTAL_URL || "http://localhost:3000";
+
   const [activeTab, setActiveTab] = useState<"leads" | "tickets">("leads");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -95,6 +102,85 @@ export default function VendorPage() {
     navigator.clipboard.writeText(text);
     setCopiedField(fieldName);
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // Manual Payment Modal State for any Lead in the table
+  const [paymentLead, setPaymentLead] = useState<VendorLead | null>(null);
+  const [leadPaymentForm, setLeadPaymentForm] = useState({
+    amount: "21600",
+    paymentMode: "Bank Transfer (NEFT/RTGS/IMPS)",
+    paymentReference: "",
+    paymentDate: new Date().toISOString().slice(0, 10),
+    notes: "",
+    setApproved: false,
+  });
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [paymentSuccessCreds, setPaymentSuccessCreds] = useState<{
+    lead: VendorLead;
+    userId: string;
+    password: string;
+  } | null>(null);
+  const [copiedPaySuccessCred, setCopiedPaySuccessCred] = useState(false);
+
+  const openPaymentModal = (lead: VendorLead) => {
+    const tierLower = (lead.preferredPackage || "gold").toLowerCase();
+    const baseCost = tierLower === "silver" ? 10800 : tierLower === "platinum" ? 54000 : 21600;
+    setLeadPaymentForm({
+      amount: String(baseCost),
+      paymentMode: "Bank Transfer (NEFT/RTGS/IMPS)",
+      paymentReference: "",
+      paymentDate: new Date().toISOString().slice(0, 10),
+      notes: "",
+      setApproved: lead.status !== "approved",
+    });
+    setPaymentLead(lead);
+  };
+
+  const handleRecordLeadPayment = async () => {
+    if (!paymentLead) return;
+    if (!leadPaymentForm.amount || Number(leadPaymentForm.amount) <= 0) {
+      alert("Please enter a valid payment amount.");
+      return;
+    }
+
+    try {
+      setSubmittingPayment(true);
+      const res = await fetch("/api/vendor/payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: paymentLead.applicationId,
+          amount: Number(leadPaymentForm.amount),
+          paymentMode: leadPaymentForm.paymentMode,
+          paymentReference: leadPaymentForm.paymentReference || `MANUAL-${Date.now().toString().slice(-6)}`,
+          paymentDate: leadPaymentForm.paymentDate,
+          notes: leadPaymentForm.notes,
+          setApproved: leadPaymentForm.setApproved,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setPaymentLead(null);
+        await fetchLeads();
+        if (data.credentials && data.credentials.userId && data.credentials.password) {
+          setPaymentSuccessCreds({
+            lead: paymentLead,
+            userId: data.credentials.userId,
+            password: data.credentials.password,
+          });
+        } else {
+          alert(data.message || "Manual payment recorded successfully! Lead status updated to in_progress.");
+        }
+      } else {
+        alert(data.error || "Failed to record manual payment.");
+      }
+    } catch (e: any) {
+      console.error("Payment submission error:", e);
+      alert(e.message || "Failed to record payment.");
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
   const fetchLeads = async () => {
@@ -168,9 +254,46 @@ export default function VendorPage() {
     fetchTickets();
   }, [statusFilter, tierFilter, ticketStatusFilter]);
 
-  const handleRefreshAll = () => {
-    fetchLeads();
-    fetchTickets();
+  const handleRefreshAll = async () => {
+    await fetchLeads();
+    await fetchTickets();
+    if (selectedLead?.id) {
+      try {
+        const freshRes = await fetch(`/api/vendor/leads/${selectedLead.id}`);
+        const freshData = await freshRes.json();
+        if (freshData.success && freshData.lead) {
+          setSelectedLead(freshData.lead);
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+  };
+
+  const handleUpdateTier = async (id: string, newTier: string) => {
+    try {
+      const res = await fetch(`/api/vendor/leads/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferredPackage: newTier }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLeads((prev) =>
+          prev.map((l) => (l.id === id ? { ...l, preferredPackage: newTier as any } : l))
+        );
+        if (selectedLead?.id === id) {
+          const freshLead = await fetch(`/api/vendor/leads/${id}`).then((r) => r.json());
+          if (freshLead.success && freshLead.lead) {
+            setSelectedLead(freshLead.lead);
+          } else {
+            setSelectedLead((prev) => (prev ? { ...prev, preferredPackage: newTier as any } : null));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to update tier:", err);
+    }
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -298,8 +421,8 @@ export default function VendorPage() {
   };
 
   const totalCount = leads.length;
-  const newCount = leads.filter((l) => l.status === "new").length;
-  const contactedCount = leads.filter((l) => l.status === "contacted").length;
+  const newOrPendingCount = leads.filter((l) => l.status === "new" || l.status === "pending").length;
+  const inProgressCount = leads.filter((l) => l.status === "in_progress" || l.status === "payment_completed").length;
   const approvedCount = leads.filter((l) => l.status === "approved").length;
 
   // Filtered tickets
@@ -411,21 +534,21 @@ export default function VendorPage() {
 
                 <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
                   <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider block">
-                    Pending Verification
+                    1. New / Pending
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{newCount}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{newOrPendingCount}</div>
                 </div>
 
                 <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
-                  <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider block">
-                    Under Inspection
+                  <span className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider block">
+                    2. Paid (In Progress)
                   </span>
-                  <div className="text-xl sm:text-2xl font-bold text-amber-600 mt-1">{contactedCount}</div>
+                  <div className="text-xl sm:text-2xl font-bold text-purple-600 mt-1">{inProgressCount}</div>
                 </div>
 
                 <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
                   <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">
-                    Active Fleet Attached
+                    3. Approved Fleet
                   </span>
                   <div className="text-xl sm:text-2xl font-bold text-emerald-600 mt-1">{approvedCount}</div>
                 </div>
@@ -451,10 +574,10 @@ export default function VendorPage() {
                     className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-emerald-500 font-medium shadow-sm"
                   >
                     <option value="all">All Statuses</option>
-                    <option value="new">New Inquiry</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="review">Inspection</option>
-                    <option value="approved">Active / Approved</option>
+                    <option value="new">1. New Inquiry</option>
+                    <option value="pending">2. Payment Pending</option>
+                    <option value="in_progress">3. Paid (In Progress)</option>
+                    <option value="approved">4. Approved / Active</option>
                     <option value="rejected">Rejected</option>
                   </select>
 
@@ -506,8 +629,7 @@ export default function VendorPage() {
                       <div
                         key={lead.id}
                         onClick={() => {
-                          setSelectedLead(lead);
-                          setIsDetailOpen(true);
+                          router.push(`/vendor/manage/${lead.id}`);
                         }}
                         className="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-sm active:scale-[0.99] transition-all cursor-pointer"
                       >
@@ -531,19 +653,19 @@ export default function VendorPage() {
                               className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-white focus:outline-none cursor-pointer ${
                                 lead.status === "approved"
                                   ? "text-emerald-700 border-emerald-200 bg-emerald-50"
-                                  : lead.status === "contacted"
-                                  ? "text-amber-700 border-amber-200 bg-amber-50"
-                                  : lead.status === "review"
+                                  : lead.status === "in_progress" || lead.status === "payment_completed"
                                   ? "text-purple-700 border-purple-200 bg-purple-50"
+                                  : lead.status === "pending"
+                                  ? "text-amber-700 border-amber-200 bg-amber-50"
                                   : lead.status === "rejected"
                                   ? "text-rose-700 border-rose-200 bg-rose-50"
                                   : "text-blue-700 border-blue-200 bg-blue-50"
                               }`}
                             >
-                              <option value="new">New</option>
-                              <option value="contacted">Contacted</option>
-                              <option value="review">Inspection</option>
-                              <option value="approved">Approved</option>
+                              <option value="new">1. New</option>
+                              <option value="pending">2. Pending</option>
+                              <option value="in_progress">3. In Progress</option>
+                              <option value="approved">4. Approved</option>
                               <option value="rejected">Rejected</option>
                             </select>
                           </div>
@@ -605,6 +727,18 @@ export default function VendorPage() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center gap-2">
+                            {lead.credentials && (
+                              <a
+                                href={`${portalUrl}/vendor/login?appId=${encodeURIComponent((lead.credentials as any).userId)}&pass=${encodeURIComponent((lead.credentials as any).password)}&auto=1`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold hover:bg-amber-100"
+                                title="Open Vendor Dashboard with 1-click auto-login"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>Portal</span>
+                              </a>
+                            )}
                             <a
                               href={`tel:${lead.mobile}`}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold hover:bg-emerald-100"
@@ -623,16 +757,37 @@ export default function VendorPage() {
                             </a>
                           </div>
 
-                          <button
-                            onClick={() => {
-                              setSelectedLead(lead);
-                              setIsDetailOpen(true);
-                            }}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200"
-                          >
-                            <span>Manage</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/activity?query=${encodeURIComponent(lead.mobile || lead.fullName)}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                              title="View Previous Activity for this vendor"
+                            >
+                              <History className="w-3.5 h-3.5 text-emerald-600" />
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openPaymentModal(lead);
+                              }}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold hover:bg-amber-100 transition-all cursor-pointer"
+                              title="Record dynamic manual payment"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Pay</span>
+                            </button>
+
+                            <Link
+                              href={`/vendor/manage/${lead.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                            >
+                              <span>Manage</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     );
@@ -677,8 +832,7 @@ export default function VendorPage() {
                               key={lead.id}
                               className="hover:bg-slate-50 transition-colors group cursor-pointer"
                               onClick={() => {
-                                setSelectedLead(lead);
-                                setIsDetailOpen(true);
+                                router.push(`/vendor/manage/${lead.id}`);
                               }}
                             >
                               <td className="py-3.5 px-4">
@@ -718,18 +872,24 @@ export default function VendorPage() {
                                 </p>
                               </td>
 
-                              <td className="py-3.5 px-4">
-                                <span
-                                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                                <select
+                                  value={lead.preferredPackage || "silver"}
+                                  onChange={(e) =>
+                                    handleUpdateTier(lead.id, e.target.value)
+                                  }
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-white focus:outline-none cursor-pointer ${
                                     lead.preferredPackage === "platinum"
-                                      ? "bg-purple-100 text-purple-700 border border-purple-200"
+                                      ? "bg-purple-50 text-purple-700 border-purple-200"
                                       : lead.preferredPackage === "gold"
-                                      ? "bg-amber-100 text-amber-700 border border-amber-200"
-                                      : "bg-slate-100 text-slate-700 border border-slate-200"
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : "bg-slate-50 text-slate-700 border-slate-200"
                                   }`}
                                 >
-                                  {lead.preferredPackage} Partner
-                                </span>
+                                  <option value="silver">Silver Partner</option>
+                                  <option value="gold">Gold Partner</option>
+                                  <option value="platinum">Platinum Partner</option>
+                                </select>
                                 <p className="text-[11px] text-slate-500 mt-1">
                                   {lead.spaceStatus || "Office Ready"}
                                 </p>
@@ -744,25 +904,36 @@ export default function VendorPage() {
                                   className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border bg-white focus:outline-none cursor-pointer ${
                                     lead.status === "approved"
                                       ? "text-emerald-700 border-emerald-200 bg-emerald-50"
-                                      : lead.status === "contacted"
-                                      ? "text-amber-700 border-amber-200 bg-amber-50"
-                                      : lead.status === "review"
+                                      : lead.status === "in_progress" || lead.status === "payment_completed"
                                       ? "text-purple-700 border-purple-200 bg-purple-50"
+                                      : lead.status === "pending"
+                                      ? "text-amber-700 border-amber-200 bg-amber-50"
                                       : lead.status === "rejected"
                                       ? "text-rose-700 border-rose-200 bg-rose-50"
                                       : "text-blue-700 border-blue-200 bg-blue-50"
                                   }`}
                                 >
-                                  <option value="new">New</option>
-                                  <option value="contacted">Contacted</option>
-                                  <option value="review">Inspection</option>
-                                  <option value="approved">Approved</option>
+                                  <option value="new">1. New</option>
+                                  <option value="pending">2. Pending</option>
+                                  <option value="in_progress">3. In Progress</option>
+                                  <option value="approved">4. Approved</option>
                                   <option value="rejected">Rejected</option>
                                 </select>
                               </td>
 
                               <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1.5">
+                                  {lead.credentials && (
+                                    <a
+                                      href={`${portalUrl}/vendor/login?appId=${encodeURIComponent((lead.credentials as any).userId)}&pass=${encodeURIComponent((lead.credentials as any).password)}&auto=1`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all"
+                                      title="Open Vendor Dashboard with 1-click auto-login"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
                                   <a
                                     href={`tel:${lead.mobile}`}
                                     className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all"
@@ -782,17 +953,33 @@ export default function VendorPage() {
                                 </div>
                               </td>
 
-                              <td className="py-3.5 px-4 text-right">
-                                <button
-                                  onClick={() => {
-                                    setSelectedLead(lead);
-                                    setIsDetailOpen(true);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 font-semibold text-[11px] transition-all"
-                                >
-                                  <span>Manage</span>
-                                  <ChevronRight className="w-3 h-3" />
-                                </button>
+                              <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Link
+                                    href={`/activity?query=${encodeURIComponent(lead.mobile || lead.fullName)}`}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition-all cursor-pointer"
+                                    title="View Previous Activity for this vendor"
+                                  >
+                                    <History className="w-3 h-3 text-emerald-600" />
+                                    <span>Activity</span>
+                                  </Link>
+                                  <button
+                                    type="button"
+                                    onClick={() => openPaymentModal(lead)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-[11px] transition-all border border-amber-200/60 cursor-pointer"
+                                    title="Record dynamic manual payment"
+                                  >
+                                    <CreditCard className="w-3 h-3 text-amber-600" />
+                                    <span>Pay</span>
+                                  </button>
+                                  <Link
+                                    href={`/vendor/manage/${lead.id}`}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-[11px] transition-all border border-emerald-200/60"
+                                  >
+                                    <span>Manage</span>
+                                    <ChevronRight className="w-3 h-3" />
+                                  </Link>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1279,24 +1466,14 @@ export default function VendorPage() {
                                     </a>
                                   )}
 
-                                  {/* Quick open lead detail modal */}
-                                  <button
-                                    onClick={() => {
-                                      const matchedLead = leads.find(
-                                        (l) => l.applicationId === t.applicationId
-                                      );
-                                      if (matchedLead) {
-                                        setSelectedLead(matchedLead);
-                                        setIsDetailOpen(true);
-                                      } else {
-                                        alert(`Vendor profile for ${t.applicationId} not found in current list.`);
-                                      }
-                                    }}
-                                    className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition-all cursor-pointer"
-                                    title="View full vendor profile"
+                                  {/* Quick open lead detail page */}
+                                  <Link
+                                    href={`/vendor/manage/${leads.find((l) => l.applicationId === t.applicationId)?.id || t.applicationId}`}
+                                    className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition-all cursor-pointer inline-flex items-center justify-center"
+                                    title="Manage vendor profile on separate page"
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" />
-                                  </button>
+                                  </Link>
                                 </div>
                               </td>
                             </tr>
@@ -1529,6 +1706,18 @@ export default function VendorPage() {
 
             <div className="space-y-2 pt-1">
               <a
+                href={`http://localhost:3001/vendor/login?appId=${encodeURIComponent(
+                  approvedCredsModal.userId
+                )}&pass=${encodeURIComponent(approvedCredsModal.password)}&auto=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Open Upgraded Vendor Dashboard</span>
+              </a>
+
+              <a
                 href={getUpgradeCredentialsWhatsAppLink(
                   approvedCredsModal.ticket.vendorMobile,
                   approvedCredsModal.ticket.vendorName,
@@ -1539,7 +1728,7 @@ export default function VendorPage() {
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-bold text-xs shadow-md transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
               >
                 <Send className="w-4 h-4" />
                 <span>Send Upgraded Login via WhatsApp</span>
@@ -1560,6 +1749,276 @@ export default function VendorPage() {
                   <Copy className="w-3.5 h-3.5" />
                 )}
                 <span>{copiedSuccessCred ? "Copied to Clipboard!" : "Copy Upgraded Credentials"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Manual Payment Modal for Leads Table */}
+      {paymentLead && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Record Dynamic Manual Payment</h3>
+                  <p className="text-[11px] text-slate-500">Offline / Direct Bank / Cash / UPI Payment Entry</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentLead(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Target Vendor Summary */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Vendor:</span>
+                <span className="font-bold text-slate-900">{paymentLead.fullName} ({paymentLead.mobile})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Application ID:</span>
+                <span className="font-mono font-bold text-emerald-700">{paymentLead.applicationId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Registered Plan:</span>
+                <span className="font-bold text-slate-800 uppercase">{paymentLead.preferredPackage} Partner</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Current Status:</span>
+                <span className="font-bold uppercase text-amber-700">{paymentLead.status}</span>
+              </div>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Payment Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  value={leadPaymentForm.amount}
+                  onChange={(e) => setLeadPaymentForm({ ...leadPaymentForm, amount: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
+                  placeholder="e.g. 21600"
+                />
+                {/* Presets */}
+                <div className="flex items-center gap-1.5 pt-1.5 flex-wrap">
+                  <span className="text-[10px] text-slate-400 font-semibold">Presets:</span>
+                  {[
+                    { label: "Silver (₹10,800)", val: "10800" },
+                    { label: "Gold (₹21,600)", val: "21600" },
+                    { label: "Platinum (₹54,000)", val: "54000" },
+                  ].map((p) => (
+                    <button
+                      key={p.val}
+                      type="button"
+                      onClick={() => setLeadPaymentForm({ ...leadPaymentForm, amount: p.val })}
+                      className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition-all cursor-pointer"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Payment Mode *
+                  </label>
+                  <select
+                    value={leadPaymentForm.paymentMode}
+                    onChange={(e) => setLeadPaymentForm({ ...leadPaymentForm, paymentMode: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="Cash">Cash (HQ / Field Office)</option>
+                    <option value="Bank Transfer (NEFT/RTGS/IMPS)">Bank Transfer (NEFT / RTGS / IMPS)</option>
+                    <option value="UPI / QR Code">UPI / QR Code (PhonePe / GPay / Paytm)</option>
+                    <option value="Cheque / DD">Cheque / Demand Draft</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Reference / UTR / Receipt No.
+                  </label>
+                  <input
+                    type="text"
+                    value={leadPaymentForm.paymentReference}
+                    onChange={(e) => setLeadPaymentForm({ ...leadPaymentForm, paymentReference: e.target.value })}
+                    placeholder="e.g. UTR-HDFC-9912 or UPI/629088"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={leadPaymentForm.paymentDate}
+                  onChange={(e) => setLeadPaymentForm({ ...leadPaymentForm, paymentDate: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                  Admin Remarks / Audit Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={leadPaymentForm.notes}
+                  onChange={(e) => setLeadPaymentForm({ ...leadPaymentForm, notes: e.target.value })}
+                  placeholder="e.g. Direct bank deposit confirmed in BroomBoom operations account."
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Action Toggle */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={leadPaymentForm.setApproved}
+                    onChange={(e) => setLeadPaymentForm({ ...leadPaymentForm, setApproved: e.target.checked })}
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-900 text-xs block">
+                      Approve &amp; Generate Login Password Immediately
+                    </span>
+                    <span className="text-[11px] text-slate-500 block">
+                      If checked, status becomes <strong>APPROVED</strong>, license is activated, and portal login credentials are created immediately.
+                      If unchecked, status becomes <strong>IN PROGRESS</strong> (Paid) awaiting final inspection.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPaymentLead(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingPayment}
+                onClick={handleRecordLeadPayment}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-60"
+              >
+                {submittingPayment ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 animate-spin" />
+                    <span>Recording Payment...</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Confirm &amp; Record Payment</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generated Credentials Success Modal */}
+      {paymentSuccessCreds && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white border border-emerald-300 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span>Payment Recorded &amp; Login Ready!</span>
+              </div>
+              <button
+                onClick={() => setPaymentSuccessCreds(null)}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Vendor <strong className="text-slate-900">{paymentSuccessCreds.lead.fullName}</strong> is now{" "}
+              <strong className="text-emerald-700 uppercase">Approved &amp; Active</strong>. Portal login credentials have been generated:
+            </p>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 font-mono text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 text-[11px]">User ID:</span>
+                <span className="font-bold text-emerald-700">{paymentSuccessCreds.userId}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 text-[11px]">Password:</span>
+                <span className="font-bold text-slate-900">{paymentSuccessCreds.password}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <a
+                href={`${portalUrl}/vendor/login?appId=${encodeURIComponent(
+                  paymentSuccessCreds.userId
+                )}&pass=${encodeURIComponent(paymentSuccessCreds.password)}&auto=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Open Vendor Dashboard</span>
+              </a>
+
+              <a
+                href={getCredentialsWhatsAppLink(
+                  paymentSuccessCreds.lead.mobile,
+                  paymentSuccessCreds.lead.fullName,
+                  paymentSuccessCreds.lead.applicationId,
+                  paymentSuccessCreds.lead.preferredPackage || "gold",
+                  paymentSuccessCreds.userId,
+                  paymentSuccessCreds.password
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>Send Credentials via WhatsApp</span>
+              </a>
+
+              <button
+                onClick={() => {
+                  const text = `BroomBoom Vendor Login Credentials\nUser ID: ${paymentSuccessCreds.userId}\nPassword: ${paymentSuccessCreds.password}\nLogin URL: ${portalUrl}/vendor/login`;
+                  navigator.clipboard.writeText(text);
+                  setCopiedPaySuccessCred(true);
+                  setTimeout(() => setCopiedPaySuccessCred(false), 2000);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200 transition-all cursor-pointer"
+              >
+                {copiedPaySuccessCred ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                <span>{copiedPaySuccessCred ? "Copied to Clipboard!" : "Copy Credentials"}</span>
               </button>
             </div>
           </div>

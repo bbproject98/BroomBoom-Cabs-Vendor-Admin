@@ -9,6 +9,10 @@ import {
   VendorSubscription,
   PlanChangeTicket,
   VendorUser,
+  AdminActivityLog,
+  ActivityActionType,
+  ManualPaymentPayload,
+  ProfileActivityGroup,
 } from "@/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -20,12 +24,7 @@ interface LocalStoreState {
   vendorSubscriptions?: VendorSubscription[];
   tickets?: PlanChangeTicket[];
   vendorUsers?: VendorUser[];
-  auditLogs: Array<{
-    id: string;
-    action: string;
-    details: string;
-    timestamp: string;
-  }>;
+  auditLogs: (AdminActivityLog | { id: string; action?: string; details?: string; timestamp?: string; [key: string]: any })[];
 }
 
 let primaryPool: Pool | null = null;
@@ -224,6 +223,27 @@ export async function initTables(): Promise<boolean> {
       CREATE INDEX IF NOT EXISTS idx_ticket_app_id ON plan_change_tickets(application_id);
       CREATE INDEX IF NOT EXISTS idx_vuser_id ON vendor_users(user_id);
       CREATE INDEX IF NOT EXISTS idx_vuser_app ON vendor_users(application_id);
+
+      CREATE TABLE IF NOT EXISTS admin_activity_logs (
+        id VARCHAR(64) PRIMARY KEY,
+        admin_name VARCHAR(100) DEFAULT 'Super Admin',
+        action_type VARCHAR(50) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        person_name VARCHAR(255),
+        person_phone VARCHAR(50),
+        title VARCHAR(255) NOT NULL,
+        details TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS person_name VARCHAR(255);
+      ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS person_phone VARCHAR(50);
+
+      CREATE INDEX IF NOT EXISTS idx_activity_created ON admin_activity_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_activity_action ON admin_activity_logs(action_type);
+      CREATE INDEX IF NOT EXISTS idx_activity_entity ON admin_activity_logs(entity_type);
+      CREATE INDEX IF NOT EXISTS idx_activity_phone ON admin_activity_logs(person_phone);
     `;
 
     await pool.query(ddl);
@@ -281,6 +301,310 @@ function writeLocalStore(state: LocalStoreState) {
   const tmp = `${LOCAL_STORE_FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2), "utf-8");
   fs.renameSync(tmp, LOCAL_STORE_FILE);
+}
+
+export async function logAdminActivity(data: {
+  adminName?: string;
+  actionType: ActivityActionType | string;
+  entityType: "vendor" | "franchise" | "subscription" | "ticket" | "credential" | string;
+  entityId: string;
+  personName?: string;
+  personPhone?: string;
+  title: string;
+  details?: string;
+}): Promise<AdminActivityLog> {
+  const now = new Date().toISOString();
+  let personName = data.personName;
+  let personPhone = data.personPhone;
+
+  // Auto-resolve Name and Phone Number from leads if not explicitly provided
+  if (!personName || !personPhone) {
+    try {
+      const local = readLocalStore();
+      const vLead = (local.vendorLeads || []).find(
+        (l) =>
+          (l.applicationId && l.applicationId.toLowerCase() === data.entityId.toLowerCase()) ||
+          l.id === data.entityId ||
+          l.mobile === data.entityId
+      );
+      if (vLead) {
+        personName = personName || vLead.fullName;
+        personPhone = personPhone || vLead.mobile;
+      } else {
+        const fLead = (local.franchiseLeads || []).find(
+          (l) =>
+            (l.applicationId && l.applicationId.toLowerCase() === data.entityId.toLowerCase()) ||
+            l.id === data.entityId ||
+            l.mobile === data.entityId
+        );
+        if (fLead) {
+          personName = personName || fLead.fullName;
+          personPhone = personPhone || fLead.mobile;
+        }
+      }
+    } catch {}
+  }
+
+  const logEntry: AdminActivityLog = {
+    id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    adminName: data.adminName || "Super Admin (HQ)",
+    actionType: data.actionType,
+    entityType: data.entityType,
+    entityId: data.entityId,
+    personName: personName || undefined,
+    personPhone: personPhone || undefined,
+    title: data.title,
+    details: data.details,
+    createdAt: now,
+  };
+
+  const pool = await getDbPool();
+  if (pool) {
+    try {
+      await initTables();
+      await pool.query(
+        `INSERT INTO admin_activity_logs (id, admin_name, action_type, entity_type, entity_id, person_name, person_phone, title, details, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+        [
+          logEntry.id,
+          logEntry.adminName,
+          logEntry.actionType,
+          logEntry.entityType,
+          logEntry.entityId,
+          logEntry.personName || null,
+          logEntry.personPhone || null,
+          logEntry.title,
+          logEntry.details || null,
+        ]
+      );
+    } catch (e: any) {
+      console.warn("[ADMIN DB] Error inserting activity log:", e.message);
+    }
+  }
+
+  try {
+    const local = readLocalStore();
+    if (!local.auditLogs) local.auditLogs = [];
+    local.auditLogs.unshift(logEntry);
+    if (local.auditLogs.length > 500) {
+      local.auditLogs = local.auditLogs.slice(0, 500);
+    }
+    writeLocalStore(local);
+  } catch (err: any) {
+    console.warn("[ADMIN DB] Error saving local activity log:", err.message);
+  }
+
+  return logEntry;
+}
+
+export async function getActivityLogs(filters?: {
+  actionType?: string;
+  entityType?: string;
+  entityId?: string;
+  query?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ logs: AdminActivityLog[]; total: number; profileGroups: ProfileActivityGroup[] }> {
+  const pool = await getDbPool();
+  let logs: AdminActivityLog[] = [];
+  let total = 0;
+
+  if (pool) {
+    try {
+      await initTables();
+      let sql = "SELECT * FROM admin_activity_logs WHERE 1=1";
+      let countSql = "SELECT COUNT(*) FROM admin_activity_logs WHERE 1=1";
+      const values: any[] = [];
+      let idx = 1;
+
+      if (filters?.entityId && filters.entityId !== "all") {
+        sql += ` AND (LOWER(entity_id) = LOWER($${idx}) OR person_phone = $${idx})`;
+        countSql += ` AND (LOWER(entity_id) = LOWER($${idx}) OR person_phone = $${idx})`;
+        values.push(filters.entityId);
+        idx++;
+      }
+
+      if (filters?.actionType && filters.actionType !== "all") {
+        sql += ` AND action_type = $${idx}`;
+        countSql += ` AND action_type = $${idx}`;
+        values.push(filters.actionType);
+        idx++;
+      }
+
+      if (filters?.entityType && filters.entityType !== "all") {
+        sql += ` AND entity_type = $${idx}`;
+        countSql += ` AND entity_type = $${idx}`;
+        values.push(filters.entityType);
+        idx++;
+      }
+
+      if (filters?.query) {
+        const q = `%${filters.query}%`;
+        sql += ` AND (LOWER(title) LIKE LOWER($${idx}) OR LOWER(entity_id) LIKE LOWER($${idx}) OR LOWER(COALESCE(person_name, '')) LIKE LOWER($${idx}) OR LOWER(COALESCE(person_phone, '')) LIKE LOWER($${idx}) OR LOWER(COALESCE(details, '')) LIKE LOWER($${idx}) OR LOWER(admin_name) LIKE LOWER($${idx}))`;
+        countSql += ` AND (LOWER(title) LIKE LOWER($${idx}) OR LOWER(entity_id) LIKE LOWER($${idx}) OR LOWER(COALESCE(person_name, '')) LIKE LOWER($${idx}) OR LOWER(COALESCE(person_phone, '')) LIKE LOWER($${idx}) OR LOWER(COALESCE(details, '')) LIKE LOWER($${idx}) OR LOWER(admin_name) LIKE LOWER($${idx}))`;
+        values.push(q);
+        idx++;
+      }
+
+      const countRes = await pool.query(countSql, values);
+      total = parseInt(countRes.rows[0]?.count || "0", 10);
+
+      sql += ` ORDER BY created_at DESC`;
+      const limit = filters?.limit || 150;
+      const offset = filters?.offset || 0;
+      sql += ` LIMIT ${limit} OFFSET ${offset}`;
+
+      const res = await pool.query(sql, values);
+      logs = res.rows.map((r) => ({
+        id: r.id,
+        adminName: r.admin_name,
+        actionType: r.action_type,
+        entityType: r.entity_type,
+        entityId: r.entity_id,
+        personName: r.person_name || undefined,
+        personPhone: r.person_phone || undefined,
+        title: r.title,
+        details: r.details || undefined,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+      }));
+    } catch (e: any) {
+      console.warn("[ADMIN DB] Error fetching activity logs from PG:", e.message);
+    }
+  }
+
+  if (logs.length === 0) {
+    const local = readLocalStore();
+    let list: AdminActivityLog[] = (local.auditLogs || []).map((l: any) => {
+      if (l.actionType) return l as AdminActivityLog;
+      return {
+        id: l.id || `act-${Date.now()}`,
+        adminName: l.adminName || "Super Admin",
+        actionType: (l.action as any) || "UPDATE",
+        entityType: l.entityType || "vendor",
+        entityId: l.entityId || l.id || "system",
+        personName: l.personName || undefined,
+        personPhone: l.personPhone || undefined,
+        title: l.title || l.action || "Admin Operation",
+        details: l.details || "",
+        createdAt: l.createdAt || l.timestamp || new Date().toISOString(),
+      };
+    });
+
+    if (filters?.entityId && filters.entityId !== "all") {
+      const eid = filters.entityId.toLowerCase();
+      list = list.filter((l) => (l.entityId && l.entityId.toLowerCase() === eid) || l.personPhone === filters.entityId);
+    }
+    if (filters?.actionType && filters.actionType !== "all") {
+      list = list.filter((l) => l.actionType === filters.actionType);
+    }
+    if (filters?.entityType && filters.entityType !== "all") {
+      list = list.filter((l) => l.entityType === filters.entityType);
+    }
+    if (filters?.query) {
+      const q = filters.query.toLowerCase();
+      list = list.filter(
+        (l) =>
+          l.title.toLowerCase().includes(q) ||
+          l.entityId.toLowerCase().includes(q) ||
+          (l.personName && l.personName.toLowerCase().includes(q)) ||
+          (l.personPhone && l.personPhone.includes(q)) ||
+          (l.details && l.details.toLowerCase().includes(q))
+      );
+    }
+    total = list.length;
+    const limit = filters?.limit || 150;
+    const offset = filters?.offset || 0;
+    logs = list.slice(offset, offset + limit);
+  }
+
+  // Build profile dictionary
+  const vendorMap = new Map<string, any>();
+  const franchiseMap = new Map<string, any>();
+  try {
+    const local = readLocalStore();
+    (local.vendorLeads || []).forEach((v) => {
+      if (v.applicationId) vendorMap.set(v.applicationId.toLowerCase(), v);
+      if (v.id) vendorMap.set(v.id.toLowerCase(), v);
+      if (v.mobile) vendorMap.set(v.mobile, v);
+    });
+    (local.franchiseLeads || []).forEach((f) => {
+      if (f.applicationId) franchiseMap.set(f.applicationId.toLowerCase(), f);
+      if (f.id) franchiseMap.set(f.id.toLowerCase(), f);
+      if (f.mobile) franchiseMap.set(f.mobile, f);
+    });
+  } catch {}
+
+  // Enrich logs with personName & personPhone
+  logs = logs.map((l) => {
+    let pName = l.personName;
+    let pPhone = l.personPhone;
+    const v = vendorMap.get(l.entityId.toLowerCase());
+    const f = franchiseMap.get(l.entityId.toLowerCase());
+    if (v) {
+      pName = pName || v.fullName;
+      pPhone = pPhone || v.mobile;
+    } else if (f) {
+      pName = pName || f.fullName;
+      pPhone = pPhone || f.mobile;
+    }
+    return {
+      ...l,
+      personName: pName || "Applicant Partner",
+      personPhone: pPhone || "—",
+    };
+  });
+
+  // Group by Profile (entityId or personPhone)
+  const groupMap = new Map<string, ProfileActivityGroup>();
+  logs.forEach((log) => {
+    const key = (log.entityId || log.personPhone || log.id).toLowerCase();
+    const v = vendorMap.get(log.entityId.toLowerCase());
+    const f = franchiseMap.get(log.entityId.toLowerCase());
+    const lead = v || f;
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        entityId: lead?.applicationId || log.entityId,
+        entityType: v ? "vendor" : f ? "franchise" : log.entityType,
+        personName: lead?.fullName || log.personName || "Valued Partner",
+        personPhone: lead?.mobile || log.personPhone || "—",
+        city: lead?.city || "",
+        state: lead?.state || "",
+        planTier: lead?.preferredPackage || "",
+        status: lead?.status || "new",
+        profileLink: v ? `/vendor/manage/${v.id}` : f ? `/franchise` : undefined,
+        activities: [],
+        lastActivityAt: log.createdAt,
+      });
+    }
+
+    const group = groupMap.get(key)!;
+    group.activities.push(log);
+    if (new Date(log.createdAt).getTime() > new Date(group.lastActivityAt).getTime()) {
+      group.lastActivityAt = log.createdAt;
+    }
+  });
+
+  const profileGroups = Array.from(groupMap.values()).sort(
+    (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
+  );
+
+  return { logs, total, profileGroups };
+}
+
+export async function clearActivityLogs(): Promise<boolean> {
+  const pool = await getDbPool();
+  if (pool) {
+    try {
+      await pool.query("DELETE FROM admin_activity_logs");
+    } catch (e: any) {
+      console.warn("[ADMIN DB] Error clearing activity logs:", e.message);
+    }
+  }
+  const local = readLocalStore();
+  local.auditLogs = [];
+  writeLocalStore(local);
+  return true;
 }
 
 // Read from sibling landing pages if present
@@ -584,9 +908,73 @@ export const adminDb = {
             setClauses.push(`mobile = $${idx++}`);
             values.push(updates.mobile);
           }
+          if (updates.alternatePhone !== undefined) {
+            setClauses.push(`alternate_phone = $${idx++}`);
+            values.push(updates.alternatePhone || null);
+          }
+          if (updates.email !== undefined) {
+            setClauses.push(`email = $${idx++}`);
+            values.push(updates.email);
+          }
+          if (updates.state !== undefined) {
+            setClauses.push(`state = $${idx++}`);
+            values.push(updates.state || null);
+          }
           if (updates.city !== undefined) {
             setClauses.push(`city = $${idx++}`);
             values.push(updates.city);
+          }
+          if (updates.pincode !== undefined) {
+            setClauses.push(`pincode = $${idx++}`);
+            values.push(updates.pincode || null);
+          }
+          if (updates.proposedAddress !== undefined) {
+            setClauses.push(`proposed_address = $${idx++}`);
+            values.push(updates.proposedAddress || null);
+          }
+          if (updates.spaceStatus !== undefined) {
+            setClauses.push(`space_status = $${idx++}`);
+            values.push(updates.spaceStatus || null);
+          }
+          if (updates.carpetArea !== undefined) {
+            setClauses.push(`carpet_area = $${idx++}`);
+            values.push(updates.carpetArea || null);
+          }
+          if (updates.preferredPackage !== undefined) {
+            setClauses.push(`preferred_package = $${idx++}`);
+            values.push(updates.preferredPackage);
+          }
+          if (updates.packageName !== undefined) {
+            setClauses.push(`package_name = $${idx++}`);
+            values.push(updates.packageName || null);
+          }
+          if (updates.investmentBudget !== undefined) {
+            setClauses.push(`investment_budget = $${idx++}`);
+            values.push(updates.investmentBudget || null);
+          }
+          if (updates.financeRequired !== undefined) {
+            setClauses.push(`finance_required = $${idx++}`);
+            values.push(updates.financeRequired || null);
+          }
+          if (updates.loanAssistance !== undefined) {
+            setClauses.push(`loan_assistance = $${idx++}`);
+            values.push(updates.loanAssistance || null);
+          }
+          if (updates.currentProfession !== undefined) {
+            setClauses.push(`current_profession = $${idx++}`);
+            values.push(updates.currentProfession || null);
+          }
+          if (updates.hasExperience !== undefined) {
+            setClauses.push(`has_experience = $${idx++}`);
+            values.push(updates.hasExperience || null);
+          }
+          if (updates.message !== undefined) {
+            setClauses.push(`message = $${idx++}`);
+            values.push(updates.message || null);
+          }
+          if (updates.source !== undefined) {
+            setClauses.push(`source = $${idx++}`);
+            values.push(updates.source);
           }
 
           values.push(id);
@@ -614,6 +1002,25 @@ export const adminDb = {
           timestamp: now,
         });
         writeLocalStore(local);
+
+        if (updates.status !== undefined) {
+          await logAdminActivity({
+            actionType: updates.status === "approved" ? "APPROVE" : updates.status === "rejected" ? "REJECT" : "STATUS_CHANGE",
+            entityType: "franchise",
+            entityId: local.franchiseLeads[index]?.applicationId || id,
+            title: `Franchise Status Changed to ${String(updates.status).toUpperCase()}`,
+            details: `Updated status for franchise lead ${local.franchiseLeads[index]?.fullName || id} to ${updates.status}`,
+          });
+        } else {
+          await logAdminActivity({
+            actionType: "UPDATE",
+            entityType: "franchise",
+            entityId: local.franchiseLeads[index]?.applicationId || id,
+            title: `Franchise Lead Updated: ${local.franchiseLeads[index]?.fullName || id}`,
+            details: `Updated details for franchise lead ${id}`,
+          });
+        }
+
         return local.franchiseLeads[index];
       }
 
@@ -632,12 +1039,22 @@ export const adminDb = {
 
       const local = readLocalStore();
       const prevLen = local.franchiseLeads.length;
+      const targetLead = local.franchiseLeads.find((l) => l.id === id || l.applicationId === id);
       local.franchiseLeads = local.franchiseLeads.filter(
         (l) => l.id !== id && l.applicationId !== id
       );
       if (local.franchiseLeads.length !== prevLen) {
         writeLocalStore(local);
       }
+
+      await logAdminActivity({
+        actionType: "DELETE",
+        entityType: "franchise",
+        entityId: targetLead?.applicationId || id,
+        title: `Franchise Lead Deleted: ${targetLead?.fullName || id}`,
+        details: `Deleted franchise applicant ${targetLead?.fullName || id} (${targetLead?.applicationId || id})`,
+      });
+
       return true;
     },
   },
@@ -901,7 +1318,10 @@ export const adminDb = {
       return newLead;
     },
 
-    async update(id: string, updates: Partial<VendorLead>): Promise<VendorLead | null> {
+    async update(
+      id: string,
+      updates: Partial<VendorLead> & { userId?: string; password?: string }
+    ): Promise<VendorLead | null> {
       const now = new Date().toISOString();
       const pool = await getDbPool();
 
@@ -928,9 +1348,73 @@ export const adminDb = {
             setClauses.push(`mobile = $${idx++}`);
             values.push(updates.mobile);
           }
+          if (updates.alternatePhone !== undefined) {
+            setClauses.push(`alternate_phone = $${idx++}`);
+            values.push(updates.alternatePhone || null);
+          }
+          if (updates.email !== undefined) {
+            setClauses.push(`email = $${idx++}`);
+            values.push(updates.email);
+          }
+          if (updates.state !== undefined) {
+            setClauses.push(`state = $${idx++}`);
+            values.push(updates.state || null);
+          }
           if (updates.city !== undefined) {
             setClauses.push(`city = $${idx++}`);
             values.push(updates.city);
+          }
+          if (updates.pincode !== undefined) {
+            setClauses.push(`pincode = $${idx++}`);
+            values.push(updates.pincode || null);
+          }
+          if (updates.proposedAddress !== undefined) {
+            setClauses.push(`proposed_address = $${idx++}`);
+            values.push(updates.proposedAddress || null);
+          }
+          if (updates.spaceStatus !== undefined) {
+            setClauses.push(`space_status = $${idx++}`);
+            values.push(updates.spaceStatus || null);
+          }
+          if (updates.carpetArea !== undefined) {
+            setClauses.push(`carpet_area = $${idx++}`);
+            values.push(updates.carpetArea || null);
+          }
+          if (updates.preferredPackage !== undefined) {
+            setClauses.push(`preferred_package = $${idx++}`);
+            values.push(updates.preferredPackage);
+          }
+          if (updates.packageName !== undefined) {
+            setClauses.push(`package_name = $${idx++}`);
+            values.push(updates.packageName || null);
+          }
+          if (updates.investmentBudget !== undefined) {
+            setClauses.push(`investment_budget = $${idx++}`);
+            values.push(updates.investmentBudget || null);
+          }
+          if (updates.financeRequired !== undefined) {
+            setClauses.push(`finance_required = $${idx++}`);
+            values.push(updates.financeRequired || null);
+          }
+          if (updates.loanAssistance !== undefined) {
+            setClauses.push(`loan_assistance = $${idx++}`);
+            values.push(updates.loanAssistance || null);
+          }
+          if (updates.currentProfession !== undefined) {
+            setClauses.push(`current_profession = $${idx++}`);
+            values.push(updates.currentProfession || null);
+          }
+          if (updates.hasExperience !== undefined) {
+            setClauses.push(`has_experience = $${idx++}`);
+            values.push(updates.hasExperience || null);
+          }
+          if (updates.message !== undefined) {
+            setClauses.push(`message = $${idx++}`);
+            values.push(updates.message || null);
+          }
+          if (updates.source !== undefined) {
+            setClauses.push(`source = $${idx++}`);
+            values.push(updates.source);
           }
 
           values.push(id);
@@ -1024,6 +1508,19 @@ export const adminDb = {
               console.warn("[ADMIN DB] Error auto-generating credentials on approve:", credErr.message);
             }
           }
+
+          if (updates.userId && updates.password && currentLead) {
+            try {
+              await adminDb.vendorUser.saveCredentials(
+                currentLead.applicationId,
+                updates.userId,
+                updates.password,
+                updates.preferredPackage || currentLead.preferredPackage
+              );
+            } catch (custCredErr: any) {
+              console.warn("[ADMIN DB] Error saving custom credentials on lead update:", custCredErr.message);
+            }
+          }
         } catch (e: any) {
           console.warn("[ADMIN DB] Error updating postgres vendor lead:", e.message);
         }
@@ -1049,20 +1546,107 @@ export const adminDb = {
 
         if (updates.status === "approved") {
           try {
-            await adminDb.vendorUser.generateCredentials(
-              local.vendorLeads[index].applicationId,
-              local.vendorLeads[index].preferredPackage || "silver"
+            const vLead = local.vendorLeads[index];
+            const vTier = (vLead.preferredPackage || "silver").toLowerCase();
+            const vBaseAmount = vTier === "silver" ? 10000 : vTier === "platinum" ? 50000 : 20000;
+            const vGatewayFee = Math.round(vBaseAmount * 0.03);
+            const vGstAmount = Math.round(vBaseAmount * 0.05);
+            const vTotalAmount = vBaseAmount + vGatewayFee + vGstAmount;
+
+            if (!local.vendorSubscriptions) local.vendorSubscriptions = [];
+            const subExistingIdx = local.vendorSubscriptions.findIndex(
+              (s) => s.applicationId === vLead.applicationId
             );
-          } catch {}
+            const activeSubObj: VendorSubscription = {
+              id: `sub-${Date.now()}`,
+              subscriptionId: `SUB-BB-2026-${vLead.applicationId.slice(-4)}`,
+              applicationId: vLead.applicationId,
+              vendorName: vLead.fullName,
+              vendorMobile: vLead.mobile,
+              vendorEmail: vLead.email,
+              city: vLead.city,
+              state: vLead.state || "West Bengal",
+              planTier: vTier,
+              planName: vLead.packageName || `${vTier.toUpperCase()} Partner`,
+              billingCycle: "annual",
+              status: "active",
+              startDate: now,
+              hasExclusivity: vTier !== "silver",
+              orderId: `ORD-BB-${Date.now().toString().slice(-6)}`,
+              paymentStatus: "PAID",
+              baseAmount: vBaseAmount,
+              gatewayFee: vGatewayFee,
+              gstAmount: vGstAmount,
+              totalAmount: vTotalAmount,
+              currency: "INR",
+              createdAt: now,
+              updatedAt: now,
+            };
+            if (subExistingIdx !== -1) {
+              local.vendorSubscriptions[subExistingIdx] = {
+                ...local.vendorSubscriptions[subExistingIdx],
+                ...activeSubObj,
+              };
+            } else {
+              local.vendorSubscriptions.unshift(activeSubObj);
+            }
+            writeLocalStore(local);
+
+            await adminDb.vendorUser.generateCredentials(
+              vLead.applicationId,
+              vTier
+            );
+          } catch (err: any) {
+            console.warn("[ADMIN DB] Error in auto-approval workflow:", err.message);
+          }
+        }
+
+        if (updates.status !== undefined) {
+          await logAdminActivity({
+            actionType: updates.status === "approved" ? "APPROVE" : updates.status === "rejected" ? "REJECT" : "STATUS_CHANGE",
+            entityType: "vendor",
+            entityId: local.vendorLeads[index]?.applicationId || id,
+            title: `Vendor Status Changed to ${String(updates.status).toUpperCase()}`,
+            details: `Updated status for ${local.vendorLeads[index]?.fullName || id} (${local.vendorLeads[index]?.applicationId || id}) to ${updates.status}`,
+          });
+        } else {
+          await logAdminActivity({
+            actionType: "UPDATE",
+            entityType: "vendor",
+            entityId: local.vendorLeads[index]?.applicationId || id,
+            title: `Vendor Lead Updated: ${local.vendorLeads[index]?.fullName || id}`,
+            details: `Updated details for ${local.vendorLeads[index]?.fullName || id} (${local.vendorLeads[index]?.applicationId || id})`,
+          });
         }
 
         return local.vendorLeads[index];
       }
 
-      return adminDb.vendor.getById(id);
+      const fresh = await adminDb.vendor.getById(id);
+      if (fresh) {
+        if (updates.status !== undefined) {
+          await logAdminActivity({
+            actionType: updates.status === "approved" ? "APPROVE" : updates.status === "rejected" ? "REJECT" : "STATUS_CHANGE",
+            entityType: "vendor",
+            entityId: fresh.applicationId || id,
+            title: `Vendor Status Changed to ${String(updates.status).toUpperCase()}`,
+            details: `Updated status for ${fresh.fullName || id} (${fresh.applicationId || id}) to ${updates.status}`,
+          });
+        } else {
+          await logAdminActivity({
+            actionType: "UPDATE",
+            entityType: "vendor",
+            entityId: fresh.applicationId || id,
+            title: `Vendor Lead Updated: ${fresh.fullName || id}`,
+            details: `Updated details for ${fresh.fullName || id} (${fresh.applicationId || id})`,
+          });
+        }
+      }
+      return fresh;
     },
 
     async delete(id: string): Promise<boolean> {
+      const targetLead = await adminDb.vendor.getById(id);
       const pool = await getDbPool();
       if (pool) {
         try {
@@ -1080,7 +1664,164 @@ export const adminDb = {
       if (local.vendorLeads.length !== prevLen) {
         writeLocalStore(local);
       }
+
+      await logAdminActivity({
+        actionType: "DELETE",
+        entityType: "vendor",
+        entityId: targetLead?.applicationId || id,
+        title: `Deleted Vendor Lead: ${targetLead?.fullName || id}`,
+        details: `Vendor lead ${targetLead?.applicationId || id} was permanently deleted by Admin HQ.`,
+      });
+
       return true;
+    },
+
+    async recordPayment(payload: ManualPaymentPayload): Promise<{
+      lead: VendorLead;
+      subscription?: VendorSubscription;
+      credentials?: VendorUser;
+    }> {
+      const {
+        applicationId,
+        amount,
+        paymentMode,
+        paymentReference,
+        paymentDate,
+        notes,
+        setApproved = false,
+      } = payload;
+
+      const lead = await adminDb.vendor.getById(applicationId);
+      if (!lead) throw new Error(`Vendor lead with ID ${applicationId} not found`);
+
+      const tier = (lead.preferredPackage || "silver").toLowerCase();
+      const planName = lead.packageName || `${tier.toUpperCase()} Partner`;
+      const baseAmount = tier === "silver" ? 10000 : tier === "platinum" ? 50000 : 20000;
+      const gatewayFee = Math.round(baseAmount * 0.03);
+      const gstAmount = Math.round(baseAmount * 0.05);
+      const orderId = `ORD-MANUAL-${Date.now().toString().slice(-6)}`;
+      const newStatus: LeadStatus = setApproved ? "approved" : "in_progress";
+      const payRef = paymentReference || `MANUAL-${Date.now().toString().slice(-6)}`;
+      const payDate = paymentDate ? new Date(paymentDate) : new Date();
+
+      const pool = await getDbPool();
+      let updatedLead: VendorLead = { ...lead, status: newStatus };
+      let updatedSub: any = undefined;
+      let generatedCreds: any = undefined;
+
+      if (pool) {
+        try {
+          await initTables();
+
+          // 1. Update Vendor Lead status & notes
+          const noteAppend = `\n[${new Date().toLocaleString()}] Manual Payment ₹${amount.toLocaleString()} received via ${paymentMode} (Ref: ${payRef}). Status set to ${newStatus.toUpperCase()}.${notes ? ` Notes: ${notes}` : ""}`;
+          const currentNotes = lead.adminNotes ? `${lead.adminNotes}\n${noteAppend}` : noteAppend;
+
+          await pool.query(
+            `UPDATE vendor_leads SET status = $1, admin_notes = $2, updated_at = NOW() WHERE LOWER(application_id) = LOWER($3) OR id = $3`,
+            [newStatus, currentNotes, applicationId]
+          );
+
+          // 2. Upsert Vendor Subscription as PAID
+          const subCheck = await pool.query(
+            `SELECT id, subscription_id FROM vendor_subscriptions WHERE LOWER(application_id) = LOWER($1) OR vendor_mobile = $2 LIMIT 1`,
+            [applicationId, lead.mobile]
+          );
+
+          if (subCheck.rowCount && subCheck.rowCount > 0) {
+            const subRes = await pool.query(
+              `UPDATE vendor_subscriptions
+               SET status = $1, payment_status = 'PAID', payment_method = $2, cf_payment_id = $3,
+                   total_amount = $4, paid_at = $5,
+                   admin_notes = CONCAT(COALESCE(admin_notes, ''), '\n', $6),
+                   updated_at = NOW()
+               WHERE id = $7 RETURNING *`,
+              [
+                setApproved ? "active" : "pending",
+                `MANUAL_${paymentMode.toUpperCase()}`,
+                payRef,
+                amount,
+                payDate,
+                `Manual payment recorded: ₹${amount} via ${paymentMode} (Ref: ${payRef})`,
+                subCheck.rows[0].id,
+              ]
+            );
+            if (subRes.rows[0]) {
+              updatedSub = subRes.rows[0];
+            }
+          } else {
+            const subRes = await pool.query(
+              `INSERT INTO vendor_subscriptions (
+                id, subscription_id, application_id, vendor_name, vendor_mobile, vendor_email,
+                city, state, plan_tier, plan_name, billing_cycle, status, start_date,
+                has_exclusivity, order_id, cf_payment_id, payment_method, payment_status,
+                base_amount, gateway_fee, gst_amount, total_amount, currency, paid_at, admin_notes, created_at, updated_at
+              ) VALUES (
+                gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, 'annual', $10, NOW(),
+                true, $11, $12, $13, 'PAID', $14, $15, $16, $17, 'INR', $18, $19, NOW(), NOW()
+              ) RETURNING *`,
+              [
+                `SUB-BB-2026-${lead.applicationId.slice(-4)}`,
+                lead.applicationId,
+                lead.fullName,
+                lead.mobile,
+                lead.email || null,
+                lead.city,
+                lead.state || "West Bengal",
+                tier,
+                planName,
+                setApproved ? "active" : "pending",
+                orderId,
+                payRef,
+                `MANUAL_${paymentMode.toUpperCase()}`,
+                baseAmount,
+                gatewayFee,
+                gstAmount,
+                amount,
+                payDate,
+                `Manual payment recorded: ₹${amount} via ${paymentMode} (Ref: ${payRef})`,
+              ]
+            );
+            if (subRes.rows[0]) {
+              updatedSub = subRes.rows[0];
+            }
+          }
+
+          // 3. If setApproved is TRUE, auto-generate & activate credentials!
+          if (setApproved) {
+            generatedCreds = await adminDb.vendorUser.generateCredentials(lead.applicationId, tier);
+          }
+        } catch (e: any) {
+          console.warn("[ADMIN DB] Error in recordPayment PG:", e.message);
+        }
+      }
+
+      // Update local store fallback
+      const local = readLocalStore();
+      const lIdx = local.vendorLeads.findIndex(
+        (l) => l.applicationId === applicationId || l.id === applicationId
+      );
+      if (lIdx !== -1) {
+        local.vendorLeads[lIdx].status = newStatus;
+        local.vendorLeads[lIdx].updatedAt = new Date().toISOString();
+        updatedLead = local.vendorLeads[lIdx];
+      }
+      writeLocalStore(local);
+
+      // Log this activity
+      await logAdminActivity({
+        actionType: "PAYMENT_RECORDED",
+        entityType: "vendor",
+        entityId: lead.applicationId,
+        title: `Manual Payment Recorded: ₹${amount.toLocaleString()} for ${lead.fullName}`,
+        details: `Recorded ₹${amount.toLocaleString()} via ${paymentMode} (Ref: ${payRef}). Status updated to ${newStatus.toUpperCase()}.${setApproved ? " Vendor approved & credentials generated." : ""}`,
+      });
+
+      return {
+        lead: updatedLead,
+        subscription: updatedSub,
+        credentials: generatedCreds,
+      };
     },
   },
 
@@ -1644,6 +2385,14 @@ export const adminDb = {
       }
       writeLocalStore(localState);
 
+      await logAdminActivity({
+        actionType: "STATUS_CHANGE",
+        entityType: "ticket",
+        entityId: updatedTicket.ticketId,
+        title: `Ticket #${updatedTicket.ticketId} Approved (Awaiting Payment)`,
+        details: `Approved plan upgrade to ${updatedTicket.requestedPlan} for ${updatedTicket.vendorName}. Total amount: ₹${totalAmount}`,
+      });
+
       return updatedTicket;
     },
 
@@ -1696,6 +2445,14 @@ export const adminDb = {
         localState.tickets.push(updatedTicket);
       }
       writeLocalStore(localState);
+
+      await logAdminActivity({
+        actionType: "PAYMENT_RECORDED",
+        entityType: "ticket",
+        entityId: updatedTicket.ticketId,
+        title: `Ticket #${updatedTicket.ticketId} Payment Verified`,
+        details: `Verified payment of ₹${updatedTicket.totalAmount || 0} for upgrade ticket #${updatedTicket.ticketId} (Ref: ${payRef})`,
+      });
 
       return updatedTicket;
     },
@@ -1926,6 +2683,14 @@ export const adminDb = {
 
       writeLocalStore(localState);
 
+      await logAdminActivity({
+        actionType: "TICKET_APPROVED",
+        entityType: "ticket",
+        entityId: updatedTicket.ticketId,
+        title: `Ticket #${updatedTicket.ticketId} Approved & Upgraded to ${newPlanName}`,
+        details: `Issued upgraded credentials (${newUserId}) for ${updatedTicket.vendorName} (${updatedTicket.applicationId})`,
+      });
+
       return {
         ticket: updatedTicket,
         newCredentials: {
@@ -1976,6 +2741,14 @@ export const adminDb = {
         localState.tickets.push(updatedTicket);
       }
       writeLocalStore(localState);
+
+      await logAdminActivity({
+        actionType: "TICKET_REJECTED",
+        entityType: "ticket",
+        entityId: updatedTicket.ticketId,
+        title: `Ticket #${updatedTicket.ticketId} Rejected`,
+        details: `Rejected plan change request for ${updatedTicket.vendorName}. Reason: ${notes}`,
+      });
 
       return updatedTicket;
     },
@@ -2097,6 +2870,44 @@ export const adminDb = {
               user.currentPlan,
             ]
           );
+
+          // Ensure active PAID subscription exists in PG for vendor portal access
+          const subCheck = await pool.query(
+            `SELECT id FROM vendor_subscriptions WHERE LOWER(application_id) = LOWER($1) OR vendor_mobile = $2`,
+            [applicationId, user.vendorMobile]
+          );
+          if (subCheck.rowCount === 0) {
+            const baseAmount = normalizedTier === "silver" ? 10000 : normalizedTier === "platinum" ? 50000 : 20000;
+            const gatewayFee = Math.round(baseAmount * 0.03);
+            const gstAmount = Math.round(baseAmount * 0.05);
+            const totalAmount = baseAmount + gatewayFee + gstAmount;
+            const planName = lead?.packageName || `${normalizedTier.toUpperCase()} Partner`;
+            await pool.query(
+              `INSERT INTO vendor_subscriptions (
+                id, subscription_id, application_id, vendor_name, vendor_mobile, vendor_email,
+                city, state, plan_tier, plan_name, billing_cycle, status, start_date,
+                has_exclusivity, order_id, payment_status, base_amount, gateway_fee, gst_amount, total_amount, currency, created_at, updated_at
+              ) VALUES (
+                gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, 'annual', 'active', NOW(), true, $10, 'PAID', $11, $12, $13, $14, 'INR', NOW(), NOW()
+              )`,
+              [
+                `SUB-BB-2026-${applicationId.slice(-4)}`,
+                applicationId,
+                user.vendorName,
+                user.vendorMobile,
+                user.vendorEmail || null,
+                lead?.city || "Kolkata",
+                lead?.state || "West Bengal",
+                normalizedTier,
+                planName,
+                `ORD-BB-${Date.now().toString().slice(-6)}`,
+                baseAmount,
+                gatewayFee,
+                gstAmount,
+                totalAmount,
+              ]
+            );
+          }
         } catch (e: any) {
           console.warn("[ADMIN DB] Postgres generateCredentials error:", e.message);
         }
@@ -2115,6 +2926,170 @@ export const adminDb = {
         local.vendorUsers.push(user);
       }
       writeLocalStore(local);
+
+      await logAdminActivity({
+        actionType: "CREDENTIALS_GENERATED",
+        entityType: "credential",
+        entityId: applicationId,
+        title: `Credentials Generated: ${userId}`,
+        details: `Generated active portal credentials for ${user.vendorName} (${applicationId}) - Plan: ${normalizedTier.toUpperCase()}`,
+      });
+
+      return user;
+    },
+
+    async saveCredentials(
+      applicationId: string,
+      userId: string,
+      password: string,
+      planTier?: string
+    ): Promise<VendorUser> {
+      const lead = await adminDb.vendor.getById(applicationId);
+
+      const candidatePlan = (
+        planTier ||
+        lead?.preferredPackage ||
+        lead?.packageName ||
+        "silver"
+      ).toLowerCase();
+
+      let normalizedTier: "silver" | "gold" | "platinum" = "silver";
+      if (candidatePlan.includes("plat")) {
+        normalizedTier = "platinum";
+      } else if (candidatePlan.includes("gold")) {
+        normalizedTier = "gold";
+      } else {
+        normalizedTier = "silver";
+      }
+
+      const cleanUserId = userId.trim();
+      const cleanPassword = password.trim();
+      const now = new Date().toISOString();
+
+      const user: VendorUser = {
+        id: `user-${Date.now()}`,
+        userId: cleanUserId,
+        password: cleanPassword,
+        applicationId,
+        vendorName: lead?.fullName || "Valued Partner",
+        vendorMobile: lead?.mobile || "9999999999",
+        vendorEmail: lead?.email,
+        currentPlan: normalizedTier,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const pool = await getDbPool();
+      if (pool) {
+        try {
+          await initTables();
+
+          // Check if user already exists for this application_id or mobile
+          const existingRes = await pool.query(
+            `SELECT id, user_id FROM vendor_users WHERE LOWER(application_id) = LOWER($1) OR vendor_mobile = $2 LIMIT 1`,
+            [applicationId, lead?.mobile || ""]
+          );
+
+          if (existingRes.rowCount && existingRes.rowCount > 0) {
+            const existingId = existingRes.rows[0].id;
+            user.id = existingId;
+            await pool.query(
+              `UPDATE vendor_users 
+               SET user_id = $1, password = $2, current_plan = $3, vendor_name = $4, vendor_mobile = $5, vendor_email = $6, is_active = true, updated_at = NOW()
+               WHERE id = $7`,
+              [
+                user.userId,
+                user.password,
+                user.currentPlan,
+                user.vendorName,
+                user.vendorMobile,
+                user.vendorEmail || null,
+                existingId,
+              ]
+            );
+          } else {
+            await pool.query(
+              `INSERT INTO vendor_users (id, user_id, password, application_id, vendor_name, vendor_mobile, vendor_email, current_plan, is_active, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW(), NOW())
+               ON CONFLICT (user_id) DO UPDATE SET password = EXCLUDED.password, current_plan = EXCLUDED.current_plan, is_active = true, updated_at = NOW()`,
+              [
+                user.id,
+                user.userId,
+                user.password,
+                user.applicationId,
+                user.vendorName,
+                user.vendorMobile,
+                user.vendorEmail || null,
+                user.currentPlan,
+              ]
+            );
+          }
+
+          // Ensure active PAID subscription exists in PG for vendor portal access
+          const subCheck = await pool.query(
+            `SELECT id FROM vendor_subscriptions WHERE LOWER(application_id) = LOWER($1) OR vendor_mobile = $2`,
+            [applicationId, user.vendorMobile]
+          );
+          if (subCheck.rowCount === 0) {
+            const baseAmount = normalizedTier === "silver" ? 10000 : normalizedTier === "platinum" ? 50000 : 20000;
+            const gatewayFee = Math.round(baseAmount * 0.03);
+            const gstAmount = Math.round(baseAmount * 0.05);
+            const totalAmount = baseAmount + gatewayFee + gstAmount;
+            const planName = lead?.packageName || `${normalizedTier.toUpperCase()} Partner`;
+            await pool.query(
+              `INSERT INTO vendor_subscriptions (
+                id, subscription_id, application_id, vendor_name, vendor_mobile, vendor_email,
+                city, state, plan_tier, plan_name, billing_cycle, status, start_date,
+                has_exclusivity, order_id, payment_status, base_amount, gateway_fee, gst_amount, total_amount, currency, created_at, updated_at
+              ) VALUES (
+                gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, 'annual', 'active', NOW(), true, $10, 'PAID', $11, $12, $13, $14, 'INR', NOW(), NOW()
+              )`,
+              [
+                `SUB-BB-2026-${applicationId.slice(-4)}`,
+                applicationId,
+                user.vendorName,
+                user.vendorMobile,
+                user.vendorEmail || null,
+                lead?.city || "Kolkata",
+                lead?.state || "West Bengal",
+                normalizedTier,
+                planName,
+                `ORD-BB-${Date.now().toString().slice(-6)}`,
+                baseAmount,
+                gatewayFee,
+                gstAmount,
+                totalAmount,
+              ]
+            );
+          } else {
+            await pool.query(
+              `UPDATE vendor_subscriptions
+               SET status = 'active', payment_status = 'PAID', plan_tier = $1, updated_at = NOW()
+               WHERE LOWER(application_id) = LOWER($2) OR vendor_mobile = $3`,
+              [normalizedTier, applicationId, user.vendorMobile]
+            );
+          }
+        } catch (e: any) {
+          console.warn("[ADMIN DB] Postgres saveCredentials error:", e.message);
+        }
+      }
+
+      const local = readLocalStore();
+      if (!local.vendorUsers) local.vendorUsers = [];
+      local.vendorUsers = local.vendorUsers.filter(
+        (u) => u.applicationId !== applicationId && u.userId !== cleanUserId
+      );
+      local.vendorUsers.push(user);
+      writeLocalStore(local);
+
+      await logAdminActivity({
+        actionType: "CREDENTIALS_UPDATED",
+        entityType: "credential",
+        entityId: applicationId,
+        title: `Custom Credentials Saved: ${cleanUserId}`,
+        details: `Saved custom credentials for ${user.vendorName} (${applicationId}) - Plan: ${normalizedTier.toUpperCase()}`,
+      });
 
       return user;
     },
@@ -2236,5 +3211,11 @@ export const adminDb = {
       topCities,
       recentActivity,
     };
+  },
+
+  activity: {
+    log: logAdminActivity,
+    getAll: getActivityLogs,
+    clear: clearActivityLogs,
   },
 };
