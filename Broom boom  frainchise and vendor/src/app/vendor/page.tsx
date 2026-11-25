@@ -31,6 +31,7 @@ import {
   Clock,
   MapPin,
   History,
+  Wallet,
 } from "lucide-react";
 import { VendorLead, LeadStatus, PlanChangeTicket } from "@/types";
 import {
@@ -711,13 +712,15 @@ export default function VendorPage() {
                                 ? "bg-purple-100 text-purple-700 border border-purple-200"
                                 : lead.preferredPackage === "gold"
                                 ? "bg-amber-100 text-amber-700 border border-amber-200"
-                                : "bg-slate-100 text-slate-700 border border-slate-200"
+                                : lead.preferredPackage === "silver"
+                                ? "bg-slate-100 text-slate-700 border border-slate-200"
+                                : "bg-slate-100 text-slate-500 border border-slate-200"
                             }`}
                           >
-                            {lead.preferredPackage} Partner
+                            {lead.preferredPackage ? `${lead.preferredPackage} Partner` : "No Package"}
                           </span>
                           <span className="text-[10px] text-slate-600">
-                            {lead.spaceStatus || "Office Ready"}
+                            {lead.spaceStatus || "null"}
                           </span>
                         </div>
 
@@ -857,7 +860,14 @@ export default function VendorPage() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-slate-600">{lead.mobile}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-slate-600 font-mono">{lead.mobile}</span>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200" title="Wallet Balance">
+                                    <Wallet className="w-2.5 h-2.5 text-emerald-600" />
+                                    <span>₹{Number(lead.walletBalance || 0).toLocaleString("en-IN")}</span>
+                                  </span>
+                                </div>
                                 {lead.email && (
                                   <p className="text-[11px] text-slate-500 truncate max-w-[150px]">
                                     {lead.email}
@@ -874,7 +884,7 @@ export default function VendorPage() {
 
                               <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
                                 <select
-                                  value={lead.preferredPackage || "silver"}
+                                  value={lead.preferredPackage || ""}
                                   onChange={(e) =>
                                     handleUpdateTier(lead.id, e.target.value)
                                   }
@@ -883,15 +893,18 @@ export default function VendorPage() {
                                       ? "bg-purple-50 text-purple-700 border-purple-200"
                                       : lead.preferredPackage === "gold"
                                       ? "bg-amber-50 text-amber-700 border-amber-200"
-                                      : "bg-slate-50 text-slate-700 border-slate-200"
+                                      : lead.preferredPackage === "silver"
+                                      ? "bg-slate-50 text-slate-700 border-slate-200"
+                                      : "bg-slate-50 text-slate-500 border-slate-200"
                                   }`}
                                 >
+                                  <option value="">No Package</option>
                                   <option value="silver">Silver Partner</option>
                                   <option value="gold">Gold Partner</option>
                                   <option value="platinum">Platinum Partner</option>
                                 </select>
                                 <p className="text-[11px] text-slate-500 mt-1">
-                                  {lead.spaceStatus || "Office Ready"}
+                                  {lead.spaceStatus || "null"}
                                 </p>
                               </td>
 

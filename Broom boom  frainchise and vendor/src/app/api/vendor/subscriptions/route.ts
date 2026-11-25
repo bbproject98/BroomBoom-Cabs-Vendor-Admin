@@ -22,7 +22,8 @@ export async function GET(request: Request) {
     const total = allSubs.length;
     const active = allSubs.filter((s) => s.status === "active").length;
     const pending = allSubs.filter((s) => s.status === "pending").length;
-    const paid = allSubs.filter((s) => s.paymentStatus === "PAID").length;
+    const paid = allSubs.filter((s) => (s.paymentStatus || "").toLowerCase() === "paid").length;
+    const failed = allSubs.filter((s) => (s.paymentStatus || "pending").toLowerCase() !== "paid").length;
     const totalRevenue = allSubs
       .filter((s) => s.paymentStatus === "PAID" || s.status === "active")
       .reduce((sum, s) => sum + (s.totalAmount || 0), 0);
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
         active,
         pending,
         paid,
+        failed,
         totalRevenue,
       },
     });

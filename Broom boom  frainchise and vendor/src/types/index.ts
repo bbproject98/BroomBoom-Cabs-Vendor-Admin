@@ -1,5 +1,3 @@
-
-
 export type LeadStatus =
   | "new"
   | "pending"
@@ -81,6 +79,8 @@ export interface VendorLead {
   pendingTicketCount?: number;
   latestTicket?: PlanChangeTicket;
   tickets?: PlanChangeTicket[];
+
+  walletBalance?: number;
 
   createdAt: string;
   updatedAt: string;
@@ -273,13 +273,16 @@ export type ActivityActionType =
   | "CREDENTIALS_UPDATED"
   | "TICKET_APPROVED"
   | "TICKET_REJECTED"
-  | "LEAD_CREATED";
+  | "LEAD_CREATED"
+  | "WALLET_CREDIT"
+  | "WALLET_DEBIT"
+  | "WALLET_UPDATE";
 
 export interface AdminActivityLog {
   id: string;
   adminName: string;
   actionType: ActivityActionType | string;
-  entityType: "vendor" | "franchise" | "subscription" | "ticket" | "credential" | string;
+  entityType: "vendor" | "franchise" | "subscription" | "ticket" | "credential" | "wallet" | string;
   entityId: string;
   personName?: string;
   personPhone?: string;
@@ -310,4 +313,25 @@ export interface ManualPaymentPayload {
   paymentDate?: string;
   notes?: string;
   setApproved?: boolean; // if true, approves immediately and issues credentials
+}
+
+export interface WalletTransaction {
+  id: string;
+  applicationId: string;
+  vendorName: string;
+  vendorMobile: string;
+  type: "CREDIT" | "DEBIT" | "SET";
+  amount: number;
+  previousBalance: number;
+  newBalance: number;
+  adminName: string;
+  remarks?: string;
+  createdAt: string;
+}
+
+export interface WalletStats {
+  totalVendors: number;
+  totalBalance: number;
+  fundedVendors: number;
+  zeroBalanceVendors: number;
 }

@@ -13,6 +13,8 @@ import {
   ActivityActionType,
   ManualPaymentPayload,
   ProfileActivityGroup,
+  WalletTransaction,
+  WalletStats,
 } from "@/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -24,6 +26,7 @@ interface LocalStoreState {
   vendorSubscriptions?: VendorSubscription[];
   tickets?: PlanChangeTicket[];
   vendorUsers?: VendorUser[];
+  walletTransactions?: WalletTransaction[];
   auditLogs: (AdminActivityLog | { id: string; action?: string; details?: string; timestamp?: string; [key: string]: any })[];
 }
 
@@ -224,6 +227,26 @@ export async function initTables(): Promise<boolean> {
       CREATE INDEX IF NOT EXISTS idx_vuser_id ON vendor_users(user_id);
       CREATE INDEX IF NOT EXISTS idx_vuser_app ON vendor_users(application_id);
 
+      
+      ALTER TABLE vendor_leads ADD COLUMN IF NOT EXISTS wallet_balance DOUBLE PRECISION DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS vendor_wallet_transactions (
+        id VARCHAR(64) PRIMARY KEY,
+        application_id VARCHAR(64) NOT NULL,
+        vendor_name VARCHAR(255) NOT NULL,
+        vendor_mobile VARCHAR(50) NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        amount DOUBLE PRECISION NOT NULL,
+        previous_balance DOUBLE PRECISION NOT NULL,
+        new_balance DOUBLE PRECISION NOT NULL,
+        admin_name VARCHAR(100) DEFAULT 'Super Admin',
+        remarks TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wallet_tx_app ON vendor_wallet_transactions(application_id);
+      CREATE INDEX IF NOT EXISTS idx_wallet_tx_created ON vendor_wallet_transactions(created_at DESC);
+  
       CREATE TABLE IF NOT EXISTS admin_activity_logs (
         id VARCHAR(64) PRIMARY KEY,
         admin_name VARCHAR(100) DEFAULT 'Super Admin',
@@ -737,6 +760,7 @@ export const adminDb = {
             source: r.source || "apply_page",
             status: (r.status as LeadStatus) || "new",
             adminNotes: r.admin_notes || undefined,
+            walletBalance: r.wallet_balance != null ? Number(r.wallet_balance) : 0,
             createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
             updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
           }));
@@ -968,12 +992,12 @@ export const adminDb = {
             setClauses.push(`has_experience = $${idx++}`);
             values.push(updates.hasExperience || null);
           }
-          if (updates.message !== undefined) {
+                    if (updates.message !== undefined) {
             setClauses.push(`message = $${idx++}`);
             values.push(updates.message || null);
           }
           if (updates.source !== undefined) {
-            setClauses.push(`source = $${idx++}`);
+            setClauses.push(`source = ${idx++}`);
             values.push(updates.source);
           }
 
@@ -1196,6 +1220,7 @@ export const adminDb = {
             pendingTicketCount: pendingCount,
             latestTicket: leadTickets[0] || undefined,
             tickets: leadTickets,
+            walletBalance: Number(lead.walletBalance || 0),
           };
         });
       } catch (enrichErr) {
@@ -1847,8 +1872,12 @@ export const adminDb = {
             values.push(filters.status);
           }
           if (filters?.paymentStatus && filters.paymentStatus !== "all") {
-            sql += ` AND LOWER(payment_status) = LOWER($${idx++})`;
-            values.push(filters.paymentStatus);
+            if (filters.paymentStatus.toUpperCase() === "FAILED_OR_PENDING") {
+              sql += ` AND LOWER(COALESCE(payment_status, 'pending')) != 'paid'`;
+            } else {
+              sql += ` AND LOWER(payment_status) = LOWER($${idx++})`;
+              values.push(filters.paymentStatus);
+            }
           }
           if (filters?.tier && filters.tier !== "all") {
             sql += ` AND LOWER(plan_tier) = LOWER($${idx++})`;
@@ -1927,7 +1956,11 @@ export const adminDb = {
         all = all.filter((s) => (s.status || "").toLowerCase() === filters.status?.toLowerCase());
       }
       if (filters?.paymentStatus && filters.paymentStatus !== "all") {
-        all = all.filter((s) => (s.paymentStatus || "").toLowerCase() === filters.paymentStatus?.toLowerCase());
+        if (filters.paymentStatus.toUpperCase() === "FAILED_OR_PENDING") {
+          all = all.filter((s) => (s.paymentStatus || "pending").toLowerCase() !== "paid");
+        } else {
+          all = all.filter((s) => (s.paymentStatus || "").toLowerCase() === filters.paymentStatus?.toLowerCase());
+        }
       }
       if (filters?.tier && filters.tier !== "all") {
         all = all.filter((s) => (s.planTier || "").toLowerCase() === filters.tier?.toLowerCase());
@@ -3211,6 +3244,153 @@ export const adminDb = {
       topCities,
       recentActivity,
     };
+  },
+
+  wallet: {
+    async getTransactions(applicationId?: string): Promise<WalletTransaction[]> {
+      const pool = await getDbPool();
+      let pgTxs: WalletTransaction[] = [];
+      if (pool) {
+        try {
+          await initTables();
+          let sql = "SELECT * FROM vendor_wallet_transactions";
+          const vals: any[] = [];
+          if (applicationId && applicationId !== "all") {
+            sql += " WHERE LOWER(application_id) = LOWER($1) OR vendor_mobile = $1";
+            vals.push(applicationId);
+          }
+          sql += " ORDER BY created_at DESC";
+          const res = await pool.query(sql, vals);
+          pgTxs = res.rows.map((r: any) => ({
+            id: r.id,
+            applicationId: r.application_id,
+            vendorName: r.vendor_name,
+            vendorMobile: r.vendor_mobile,
+            type: r.type,
+            amount: Number(r.amount),
+            previousBalance: Number(r.previous_balance),
+            newBalance: Number(r.new_balance),
+            adminName: r.admin_name || "Super Admin",
+            remarks: r.remarks || undefined,
+            createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+          }));
+        } catch (e: any) {
+          console.warn("[ADMIN DB] Error querying wallet transactions:", e.message);
+        }
+      }
+
+      const local = readLocalStore();
+      const localTxs = local.walletTransactions || [];
+      const map = new Map<string, WalletTransaction>();
+      localTxs.forEach((t) => map.set(t.id, t));
+      pgTxs.forEach((t) => map.set(t.id, t));
+      let all = Array.from(map.values());
+      if (applicationId && applicationId !== "all") {
+        const app = applicationId.toLowerCase();
+        all = all.filter(
+          (t) => (t.applicationId && t.applicationId.toLowerCase() === app) || t.vendorMobile === applicationId
+        );
+      }
+      all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return all;
+    },
+
+    async updateBalance(params: {
+      applicationId: string;
+      amount: number;
+      type: "CREDIT" | "DEBIT" | "SET";
+      remarks?: string;
+      adminName?: string;
+    }): Promise<{ vendor: VendorLead; transaction: WalletTransaction }> {
+      const { applicationId, amount, type, remarks, adminName = "Super Admin" } = params;
+      const lead = await adminDb.vendor.getById(applicationId);
+      if (!lead) throw new Error(`Vendor with ID ${applicationId} not found`);
+
+      const prevBalance = Number(lead.walletBalance || 0);
+      let newBalance = prevBalance;
+      if (type === "CREDIT") {
+        newBalance = prevBalance + Math.abs(amount);
+      } else if (type === "DEBIT") {
+        newBalance = Math.max(0, prevBalance - Math.abs(amount));
+      } else if (type === "SET") {
+        newBalance = Math.max(0, amount);
+      }
+
+      const txId = `wtx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const now = new Date().toISOString();
+
+      const tx: WalletTransaction = {
+        id: txId,
+        applicationId: lead.applicationId,
+        vendorName: lead.fullName,
+        vendorMobile: lead.mobile,
+        type,
+        amount: Math.abs(amount),
+        previousBalance: prevBalance,
+        newBalance,
+        adminName,
+        remarks: remarks || `Wallet ${type.toLowerCase()} by ${adminName}`,
+        createdAt: now,
+      };
+
+      const pool = await getDbPool();
+      if (pool) {
+        try {
+          await initTables();
+          await pool.query(
+            `UPDATE vendor_leads SET wallet_balance = $1, updated_at = NOW() WHERE LOWER(application_id) = LOWER($2) OR id = $2`,
+            [newBalance, lead.applicationId]
+          );
+          await pool.query(
+            `INSERT INTO vendor_wallet_transactions (id, application_id, vendor_name, vendor_mobile, type, amount, previous_balance, new_balance, admin_name, remarks, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())`,
+            [tx.id, tx.applicationId, tx.vendorName, tx.vendorMobile, tx.type, tx.amount, tx.previousBalance, tx.newBalance, tx.adminName, tx.remarks]
+          );
+        } catch (e: any) {
+          console.warn("[ADMIN DB] Error updating wallet in PG:", e.message);
+        }
+      }
+
+      const local = readLocalStore();
+      const lIdx = local.vendorLeads.findIndex(
+        (l) => l.applicationId === lead.applicationId || l.id === lead.id
+      );
+      if (lIdx !== -1) {
+        local.vendorLeads[lIdx].walletBalance = newBalance;
+        local.vendorLeads[lIdx].updatedAt = now;
+      }
+      if (!local.walletTransactions) local.walletTransactions = [];
+      local.walletTransactions.unshift(tx);
+      writeLocalStore(local);
+
+      // Log to admin activity logs so it displays in Previous Activity
+      const actionType = type === "CREDIT" ? "WALLET_CREDIT" : type === "DEBIT" ? "WALLET_DEBIT" : "WALLET_UPDATE";
+      await logAdminActivity({
+        adminName,
+        actionType,
+        entityType: "vendor",
+        entityId: lead.applicationId,
+        personName: lead.fullName,
+        personPhone: lead.mobile,
+        title: `Wallet ${type}: ₹${Math.abs(amount).toLocaleString("en-IN")} for ${lead.fullName}`,
+        details: `Balance changed from ₹${prevBalance.toLocaleString("en-IN")} to ₹${newBalance.toLocaleString("en-IN")}.${remarks ? ` Remarks: ${remarks}` : ""}`,
+      });
+
+      const updatedLead = { ...lead, walletBalance: newBalance };
+      return { vendor: updatedLead, transaction: tx };
+    },
+
+    async getStats(): Promise<WalletStats> {
+      const vendors = await adminDb.vendor.getAll();
+      const totalBalance = vendors.reduce((acc, v) => acc + (v.walletBalance || 0), 0);
+      const fundedVendors = vendors.filter((v) => (v.walletBalance || 0) > 0).length;
+      return {
+        totalVendors: vendors.length,
+        totalBalance,
+        fundedVendors,
+        zeroBalanceVendors: vendors.length - fundedVendors,
+      };
+    },
   },
 
   activity: {

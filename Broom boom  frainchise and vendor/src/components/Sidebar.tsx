@@ -15,6 +15,9 @@ import {
   Ticket,
   Activity,
   X,
+  Wallet,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,17 +40,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const pathname = usePathname();
   const isVendorActive = pathname?.startsWith("/vendor");
+  const isSubsActive = pathname === "/vendor/subscriptions";
   const [vendorOpen, setVendorOpen] = useState(true);
+  const [subsOpen, setSubsOpen] = useState(true);
+  const [subSection, setSubSection] = useState<"all" | "paid" | "failed">("all");
   const [isTicketsTab, setIsTicketsTab] = useState(false);
 
   useEffect(() => {
     if (isVendorActive) {
       setVendorOpen(true);
     }
+    if (isSubsActive) {
+      setSubsOpen(true);
+    }
     if (typeof window !== "undefined") {
       setIsTicketsTab(pathname === "/vendor" && window.location.search.includes("tab=tickets"));
+      const params = new URLSearchParams(window.location.search);
+      const sec = params.get("section");
+      if (isSubsActive && (sec === "paid" || sec === "failed")) {
+        setSubSection(sec);
+      } else {
+        setSubSection("all");
+      }
     }
-  }, [pathname, isVendorActive]);
+  }, [pathname, isVendorActive, isSubsActive]);
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -193,35 +209,132 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </Link>
 
-            {/* Subscriptions */}
+            {/* Vendor Wallets */}
             <Link
-              href="/vendor/subscriptions"
+              href="/vendor/wallet"
               onClick={() => isMobileDrawer && onCloseMobile?.()}
               className={cn(
                 "flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group",
-                pathname === "/vendor/subscriptions"
+                pathname === "/vendor/wallet" || pathname === "/wallet"
                   ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               )}
             >
               <div className="flex items-center gap-2.5">
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Subscriptions</span>
+                <Wallet className="w-3.5 h-3.5" />
+                <span>Vendor Wallets</span>
+              </div>
+            </Link>
+
+            {/* Subscriptions with inner Paid & Failed sections */}
+            <div className="space-y-1">
+              <div
+                className={cn(
+                  "flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group",
+                  isSubsActive && subSection === "all"
+                    ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
+                    : isSubsActive
+                    ? "bg-emerald-50 text-emerald-800 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                )}
+              >
+                <Link
+                  href="/vendor/subscriptions"
+                  onClick={() => {
+                    setSubSection("all");
+                    setSubsOpen(true);
+                    if (isMobileDrawer) onCloseMobile?.();
+                  }}
+                  className="flex items-center gap-2.5 flex-1 min-w-0"
+                >
+                  <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Subscriptions</span>
+                </Link>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {vendorSubCount > 0 && (
+                    <span
+                      className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded font-bold",
+                        isSubsActive && subSection === "all"
+                          ? "bg-slate-950 text-emerald-400"
+                          : "text-emerald-600 bg-emerald-50"
+                      )}
+                    >
+                      {vendorSubCount}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSubsOpen((prev) => !prev)}
+                    className="p-0.5 rounded hover:bg-black/10 transition-colors cursor-pointer"
+                    aria-label="Toggle Subscriptions sections"
+                  >
+                    {subsOpen ? (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
               </div>
 
-              {vendorSubCount > 0 && (
-                <span
-                  className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded font-bold",
-                    pathname === "/vendor/subscriptions"
-                      ? "bg-slate-950 text-emerald-400"
-                      : "text-emerald-600 bg-emerald-50"
-                  )}
-                >
-                  {vendorSubCount}
-                </span>
+              {subsOpen && (
+                <div className="pl-4 pr-1 py-0.5 space-y-1 border-l-2 border-slate-200 ml-3.5">
+                  <Link
+                    href="/vendor/subscriptions?section=paid"
+                    onClick={() => {
+                      setSubSection("paid");
+                      if (isMobileDrawer) onCloseMobile?.();
+                    }}
+                    className={cn(
+                      "flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all",
+                      isSubsActive && subSection === "paid"
+                        ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
+                        : "text-slate-600 hover:text-emerald-700 hover:bg-emerald-50/70"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2
+                        className={cn(
+                          "w-3 h-3",
+                          isSubsActive && subSection === "paid"
+                            ? "text-slate-950"
+                            : "text-emerald-600"
+                        )}
+                      />
+                      <span>Paid</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/vendor/subscriptions?section=failed"
+                    onClick={() => {
+                      setSubSection("failed");
+                      if (isMobileDrawer) onCloseMobile?.();
+                    }}
+                    className={cn(
+                      "flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all",
+                      isSubsActive && subSection === "failed"
+                        ? "bg-rose-500 text-white font-bold shadow-sm"
+                        : "text-slate-600 hover:text-rose-700 hover:bg-rose-50/70"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <XCircle
+                        className={cn(
+                          "w-3 h-3",
+                          isSubsActive && subSection === "failed"
+                            ? "text-white"
+                            : "text-rose-500"
+                        )}
+                      />
+                      <span>Failed</span>
+                    </div>
+                  </Link>
+                </div>
               )}
-            </Link>
+            </div>
 
             {/* Plan Change Tickets */}
             <Link

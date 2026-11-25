@@ -33,16 +33,24 @@ import {
   Clock,
   X,
   History,
+  Wallet,
   ChevronDown,
   ChevronUp,
+  Plus,
+  Minus,
+  ArrowUpRight,
+  ArrowDownLeft,
+  TrendingUp,
 } from "lucide-react";
-import { VendorLead, LeadStatus, VendorUser, PlanChangeTicket, AdminActivityLog } from "@/types";
+import { VendorLead, LeadStatus, VendorUser, PlanChangeTicket, AdminActivityLog, WalletTransaction } from "@/types";
 import {
   formatDate,
   getWhatsAppLink,
   getCredentialsWhatsAppLink,
   getUpgradeCredentialsWhatsAppLink,
   calculateUpgradeFees,
+  formatDateTime,
+  calculateVendorCancellationFee,
 } from "@/lib/utils";
 
 export default function VendorManagePage() {
@@ -72,15 +80,15 @@ export default function VendorManagePage() {
     proposedAddress: "",
     spaceStatus: "",
     carpetArea: "",
-    preferredPackage: "silver",
+    preferredPackage: "",
     packageName: "",
     investmentBudget: "",
-    financeRequired: "Self-Funded / Ready Capital",
-    loanAssistance: "No (Self-Funded)",
+    financeRequired: "",
+    loanAssistance: "",
     currentProfession: "",
     hasExperience: "",
     message: "",
-    source: "apply_page",
+    source: "",
     status: "new" as LeadStatus,
   });
 
@@ -127,6 +135,78 @@ export default function VendorManagePage() {
   });
   const [recordingPayment, setRecordingPayment] = useState(false);
 
+  // Vendor Wallet & Recharge Ledger State
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [loadingWalletTx, setLoadingWalletTx] = useState(false);
+  const [walletModalType, setWalletModalType] = useState<"CREDIT" | "DEBIT" | "CANCEL_FEE" | null>(null);
+  const [walletAmount, setWalletAmount] = useState("");
+  const [walletRemarks, setWalletRemarks] = useState("");
+  const [tripFareInput, setTripFareInput] = useState("");
+  const [submittingWallet, setSubmittingWallet] = useState(false);
+
+  const cancelCalculation = React.useMemo(() => {
+    const fare = parseFloat(tripFareInput);
+    if (!fare || fare <= 0) return null;
+    return calculateVendorCancellationFee(fare);
+  }, [tripFareInput]);
+
+  const fetchWalletForLead = async (targetAppId?: string) => {
+    const appId = targetAppId || lead?.applicationId;
+    if (!appId) return;
+    try {
+      setLoadingWalletTx(true);
+      const res = await fetch(`/api/vendor/wallet/transactions?applicationId=${encodeURIComponent(appId)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.transactions)) {
+        setWalletTransactions(data.transactions);
+      }
+    } catch (e) {
+      console.warn("Could not load wallet transactions:", e);
+    } finally {
+      setLoadingWalletTx(false);
+    }
+  };
+
+  const handleWalletTransaction = async (type: "CREDIT" | "DEBIT", amount: number, remarks: string) => {
+    if (!lead?.applicationId) return;
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid positive amount.");
+      return;
+    }
+    try {
+      setSubmittingWallet(true);
+      const res = await fetch("/api/vendor/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: lead.applicationId,
+          type,
+          amount,
+          remarks: remarks.trim() || undefined,
+          adminName: "Super Admin (HQ)",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWalletBalance(data.newBalance ?? (type === "CREDIT" ? walletBalance + amount : Math.max(0, walletBalance - amount)));
+        showNotification(data.message || `Wallet ${type === "CREDIT" ? "recharged" : "debited"} successfully!`);
+        setWalletModalType(null);
+        setWalletAmount("");
+        setWalletRemarks("");
+        setTripFareInput("");
+        await fetchWalletForLead(lead.applicationId);
+        await fetchLeadActivities(lead.applicationId);
+      } else {
+        alert(data.error || "Failed to update wallet balance.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to process wallet transaction.");
+    } finally {
+      setSubmittingWallet(false);
+    }
+  };
+
   // Previous Activity State for this profile
   const [leadActivities, setLeadActivities] = useState<AdminActivityLog[]>([]);
   const [showActivityDropdown, setShowActivityDropdown] = useState(false);
@@ -172,17 +252,17 @@ export default function VendorManagePage() {
           state: l.state || "",
           pincode: l.pincode || "",
           proposedAddress: l.proposedAddress || "",
-          spaceStatus: l.spaceStatus || "Owned commercial space ready",
-          carpetArea: l.carpetArea || "800 - 1,200 sq.ft (Ideal for Platinum Master)",
-          preferredPackage: l.preferredPackage || "silver",
-          packageName: l.packageName || `${(l.preferredPackage || "silver").toUpperCase()} Partner`,
-          investmentBudget: l.investmentBudget || "₹50,000 (Platinum Package - 50% OFF Exclusive Deal)",
-          financeRequired: l.financeRequired || "Self-Funded / Ready Capital",
-          loanAssistance: l.loanAssistance || "No (Self-Funded)",
-          currentProfession: l.currentProfession || "Tour & Travels, Taxi Fleet Owner",
-          hasExperience: l.hasExperience || "Yes, currently in travel / taxi / logistics",
+          spaceStatus: l.spaceStatus || "",
+          carpetArea: l.carpetArea || "",
+          preferredPackage: l.preferredPackage || "",
+          packageName: l.packageName || "",
+          investmentBudget: l.investmentBudget || "",
+          financeRequired: l.financeRequired || "",
+          loanAssistance: l.loanAssistance || "",
+          currentProfession: l.currentProfession || "",
+          hasExperience: l.hasExperience || "",
           message: l.message || "",
-          source: l.source || "apply_page",
+          source: l.source || "",
           status: (l.status as LeadStatus) || "new",
         });
 
@@ -190,6 +270,8 @@ export default function VendorManagePage() {
         fetchCredentialsForLead(l);
         fetchTicketsForLead(l);
         fetchLeadActivities(l.applicationId);
+        setWalletBalance(Number(l.walletBalance || 0));
+        fetchWalletForLead(l.applicationId);
       } else {
         alert("Vendor lead not found");
       }
@@ -766,6 +848,14 @@ export default function VendorManagePage() {
                       ⚡ Upgrade Ticket ({pendingTickets.length})
                     </span>
                   )}
+                                    <Link
+                    href={`/vendor/wallet?query=${encodeURIComponent(lead.applicationId)}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono text-[11px] font-bold transition-all shadow-2xs"
+                    title="Open Vendor Wallet"
+                  >
+                    <Wallet className="w-3 h-3 text-emerald-600" />
+                    <span>Wallet: ₹{Number(lead.walletBalance || 0).toLocaleString("en-IN")}</span>
+                  </Link>
                   {saveSuccessMsg && (
                     <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1.5 animate-in fade-in">
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1326,6 +1416,219 @@ export default function VendorManagePage() {
             )}
           </div>
 
+          {/* ========================================================================= */}
+          {/* SECTION 3.5: VENDOR WALLET & RECHARGE LEDGER (Date & Time + Cancel Fee)     */}
+          {/* ========================================================================= */}
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Wallet className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>Vendor Wallet &amp; Recharge Ledger</span>
+                    <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      ₹{walletBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Live balance &amp; complete audit history of all wallet recharges, debits &amp; cancellation fees
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWalletModalType("CREDIT");
+                    setWalletAmount("");
+                    setWalletRemarks("");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                  title="Add funds / Recharge vendor wallet"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Recharge Wallet</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWalletModalType("DEBIT");
+                    setWalletAmount("");
+                    setWalletRemarks("");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition-all cursor-pointer"
+                  title="Deduct funds from vendor wallet"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                  <span>Debit Funds</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWalletModalType("CANCEL_FEE");
+                    setTripFareInput("");
+                    setWalletAmount("");
+                    setWalletRemarks("");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs transition-all cursor-pointer"
+                  title="Apply Cancellation Charge: ₹100 or 10% of total fare, whichever is higher"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>⚡ Trip Cancellation (₹100 or 10%)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fetchWalletForLead(lead.applicationId)}
+                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+                  title="Refresh Wallet Ledger"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingWalletTx ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Wallet Balance Hero Banner */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-white border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wide">
+                  Current Available Wallet Balance
+                </span>
+                <div className="text-2xl font-black text-emerald-950 font-mono">
+                  ₹{walletBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </div>
+                <p className="text-[11px] text-emerald-700">
+                  Account: <span className="font-mono font-bold">{lead.applicationId}</span> • {lead.fullName} ({lead.mobile})
+                </p>
+              </div>
+
+              <div className="text-left sm:text-right space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-[11px] font-semibold text-slate-700 shadow-2xs">
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Policy: Cancellation charge is <strong>₹100 or 10%</strong> (whichever is higher)</span>
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Total Recorded Transactions: <strong>{walletTransactions.length}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Transactions Ledger Table with Date and Time */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                  Wallet Recharge &amp; Deduction History (With Date &amp; Time)
+                </span>
+                <span className="text-slate-400 text-[11px]">
+                  Admin Date &amp; Time Stamp Log
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Type</th>
+                        <th className="py-2.5 px-3">Amount</th>
+                        <th className="py-2.5 px-3">Balance Ledger</th>
+                        <th className="py-2.5 px-3">Remarks / Reason</th>
+                        <th className="py-2.5 px-3">Date &amp; Time</th>
+                        <th className="py-2.5 px-3 text-right">Processed By</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {loadingWalletTx ? (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-slate-500">
+                            <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-1" />
+                            <span className="text-xs">Loading wallet ledger...</span>
+                          </td>
+                        </tr>
+                      ) : walletTransactions.length > 0 ? (
+                        walletTransactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-flex items-center gap-1 ${
+                                  tx.type === "CREDIT"
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : tx.type === "DEBIT"
+                                    ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                    : "bg-blue-100 text-blue-800 border border-blue-200"
+                                }`}
+                              >
+                                {tx.type === "CREDIT" ? (
+                                  <ArrowUpRight className="w-3 h-3 text-emerald-700" />
+                                ) : tx.type === "DEBIT" ? (
+                                  <ArrowDownLeft className="w-3 h-3 text-rose-700" />
+                                ) : (
+                                  <Wallet className="w-3 h-3" />
+                                )}
+                                <span>{tx.type === "CREDIT" ? "RECHARGE" : tx.type}</span>
+                              </span>
+                            </td>
+
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                              <span className={tx.type === "CREDIT" ? "text-emerald-700" : "text-rose-700"}>
+                                {tx.type === "CREDIT" ? "+" : "-"}₹{Number(tx.amount).toLocaleString("en-IN")}
+                              </span>
+                            </td>
+
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                              <span>₹{Number(tx.previousBalance || 0).toLocaleString("en-IN")}</span>
+                              <span className="mx-1 text-slate-400">→</span>
+                              <strong className="text-slate-900">₹{Number(tx.newBalance).toLocaleString("en-IN")}</strong>
+                            </td>
+
+                            <td className="py-2.5 px-3 text-slate-700 max-w-xs truncate text-[11px]">
+                              {tx.remarks || "Wallet transaction"}
+                            </td>
+
+                            <td className="py-2.5 px-3">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>{formatDateTime(tx.createdAt)}</span>
+                              </span>
+                            </td>
+
+                            <td className="py-2.5 px-3 text-right text-slate-600 text-[11px] font-medium">
+                              {tx.adminName}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-slate-400">
+                            <div className="space-y-1">
+                              <p className="text-xs">No wallet recharge or deduction records found for this vendor.</p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWalletModalType("CREDIT");
+                                  setWalletAmount("1000");
+                                  setWalletRemarks("Initial wallet recharge deposit");
+                                }}
+                                className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
+                              >
+                                + Perform First Wallet Recharge
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* SECTION 4: Current Registered Tier & Financial Terms (Directly Editable) */}
           <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1361,6 +1664,15 @@ export default function VendorManagePage() {
                   value={editForm.preferredPackage}
                   onChange={(e) => {
                     const tier = e.target.value;
+                    if (!tier) {
+                      setEditForm({
+                        ...editForm,
+                        preferredPackage: "",
+                        packageName: "",
+                        investmentBudget: "",
+                      });
+                      return;
+                    }
                     const name =
                       tier === "silver"
                         ? "Silver Partner (Booking Kiosk)"
@@ -1382,6 +1694,7 @@ export default function VendorManagePage() {
                   }}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 font-bold focus:bg-white transition-all"
                 >
+                  <option value="">No Package (null)</option>
                   <option value="silver">Silver Partner (₹10,000)</option>
                   <option value="gold">Gold Partner (₹20,000)</option>
                   <option value="platinum">Platinum Partner (₹50,000)</option>
@@ -1396,7 +1709,7 @@ export default function VendorManagePage() {
                   type="text"
                   value={editForm.packageName}
                   onChange={(e) => setEditForm({ ...editForm, packageName: e.target.value })}
-                  placeholder="e.g. Platinum Partner (Regional Master Hub)"
+                  placeholder="null"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
                 />
               </div>
@@ -1409,7 +1722,7 @@ export default function VendorManagePage() {
                   type="text"
                   value={editForm.investmentBudget}
                   onChange={(e) => setEditForm({ ...editForm, investmentBudget: e.target.value })}
-                  placeholder="e.g. ₹50,000 (Platinum Package)"
+                  placeholder="null"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
                 />
               </div>
@@ -1425,6 +1738,7 @@ export default function VendorManagePage() {
                   onChange={(e) => setEditForm({ ...editForm, financeRequired: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
                 >
+                  <option value="">null</option>
                   <option value="Self-Funded / Ready Capital">Self-Funded / Ready Capital</option>
                   <option value="Bank Loan Required">Bank Loan Required</option>
                   <option value="Partial Finance Required">Partial Finance Required</option>
@@ -1441,6 +1755,7 @@ export default function VendorManagePage() {
                   onChange={(e) => setEditForm({ ...editForm, loanAssistance: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
                 >
+                  <option value="">null</option>
                   <option value="No (Self-Funded)">No (Self-Funded)</option>
                   <option value="Yes Required">Yes Required</option>
                   <option value="Exploring Options">Exploring Options</option>
@@ -1527,7 +1842,7 @@ export default function VendorManagePage() {
                   list="space-options"
                   value={editForm.spaceStatus}
                   onChange={(e) => setEditForm({ ...editForm, spaceStatus: e.target.value })}
-                  placeholder="e.g. Owned commercial space ready"
+                  placeholder="null"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
                 />
                 <datalist id="space-options">
@@ -1547,7 +1862,7 @@ export default function VendorManagePage() {
                   list="carpet-options"
                   value={editForm.carpetArea}
                   onChange={(e) => setEditForm({ ...editForm, carpetArea: e.target.value })}
-                  placeholder="e.g. 800 - 1,200 sq.ft (Ideal for Platinum Master)"
+                  placeholder="null"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
                 />
                 <datalist id="carpet-options">
@@ -1567,7 +1882,7 @@ export default function VendorManagePage() {
                 type="text"
                 value={editForm.proposedAddress}
                 onChange={(e) => setEditForm({ ...editForm, proposedAddress: e.target.value })}
-                placeholder="Full address of proposed fleet operations office"
+                placeholder="null"
                 className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 text-xs focus:bg-white transition-all"
               />
             </div>
@@ -1603,54 +1918,54 @@ export default function VendorManagePage() {
                 <label className="text-[11px] font-semibold text-slate-600 block mb-1">
                   Current Profession / Fleet Business
                 </label>
-                <input
-                  type="text"
-                  value={editForm.currentProfession}
-                  onChange={(e) => setEditForm({ ...editForm, currentProfession: e.target.value })}
-                  placeholder="e.g. Tour & Travels, Taxi Fleet Owner"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                />
+                  <input
+                    type="text"
+                    value={editForm.currentProfession}
+                    onChange={(e) => setEditForm({ ...editForm, currentProfession: e.target.value })}
+                    placeholder="null"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Fleet / Taxi Experience
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.hasExperience}
+                    onChange={(e) => setEditForm({ ...editForm, hasExperience: e.target.value })}
+                    placeholder="null"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Fleet / Taxi Experience
-                </label>
-                <input
-                  type="text"
-                  value={editForm.hasExperience}
-                  onChange={(e) => setEditForm({ ...editForm, hasExperience: e.target.value })}
-                  placeholder="e.g. Yes, currently in travel / taxi / logistics"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                />
-              </div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Vendor Inquiry / Vehicle Breakdown Notes
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editForm.message}
+                    onChange={(e) => setEditForm({ ...editForm, message: e.target.value })}
+                    placeholder="null"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 text-xs focus:bg-white transition-all"
+                  />
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
-              <div className="sm:col-span-2">
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Vendor Inquiry / Vehicle Breakdown Notes
-                </label>
-                <textarea
-                  rows={2}
-                  value={editForm.message}
-                  onChange={(e) => setEditForm({ ...editForm, message: e.target.value })}
-                  placeholder="e.g. 5 Swift Dzire, 3 Ertiga ready for attachment"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 text-xs focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Lead Acquisition Source
-                </label>
-                <input
-                  type="text"
-                  value={editForm.source}
-                  onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
-                  placeholder="e.g. apply_page"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                />
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Lead Acquisition Source
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.source}
+                    onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                    placeholder="null"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  />
               </div>
             </div>
           </div>
@@ -2096,6 +2411,215 @@ export default function VendorManagePage() {
           </div>
         );
       })()}
+
+      {/* ========================================================================= */}
+      {/* VENDOR WALLET MODAL: CREDIT / DEBIT / CANCELLATION CHARGE CALCULATOR       */}
+      {/* ========================================================================= */}
+      {walletModalType && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`p-2 rounded-xl ${
+                    walletModalType === "CREDIT"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : walletModalType === "CANCEL_FEE"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {walletModalType === "CREDIT" ? (
+                    <ArrowUpRight className="w-4 h-4" />
+                  ) : walletModalType === "CANCEL_FEE" ? (
+                    <Sparkles className="w-4 h-4" />
+                  ) : (
+                    <ArrowDownLeft className="w-4 h-4" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    {walletModalType === "CREDIT"
+                      ? "Recharge / Credit Vendor Wallet"
+                      : walletModalType === "CANCEL_FEE"
+                      ? "Trip Cancellation Charge Calculator"
+                      : "Debit / Deduct Funds from Wallet"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {lead.fullName} • {lead.applicationId}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWalletModalType(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Balance Display */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-slate-500 block text-[11px]">Current Wallet Balance</span>
+                <span className="text-base font-bold text-slate-900 font-mono">
+                  ₹{walletBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-slate-500 block text-[11px]">Mobile</span>
+                <span className="font-mono font-semibold text-slate-800">{lead.mobile}</span>
+              </div>
+            </div>
+
+            {/* ── CANCELLATION CHARGE CALCULATOR ── */}
+            {walletModalType === "CANCEL_FEE" && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">
+                    Official Cancellation Policy
+                  </span>
+                </div>
+                <p className="text-[10px] text-amber-800 leading-relaxed">
+                  Logic: <strong>₹100 or 10% of total trip fare, whichever is higher.</strong>
+                </p>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-amber-950 block">
+                    Enter Trip Total Fare (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-600 font-bold text-xs">₹</span>
+                    <input
+                      type="number"
+                      placeholder="e.g. 850 or 1600"
+                      value={tripFareInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTripFareInput(val);
+                        const f = parseFloat(val);
+                        if (f && f > 0) {
+                          const calc = calculateVendorCancellationFee(f);
+                          setWalletAmount(String(calc.fee));
+                          setWalletRemarks(`Trip cancellation fee applied: max(₹100, 10% of ₹${f}) = ₹${calc.fee}`);
+                        } else {
+                          setWalletAmount("");
+                        }
+                      }}
+                      className="w-full pl-7 pr-3 py-2 rounded-lg bg-white border border-amber-300 text-xs font-mono text-slate-900 font-bold focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {cancelCalculation && (
+                  <div className="p-2.5 rounded-lg bg-white border border-amber-200 text-xs space-y-1 font-mono">
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>10% of Total Fare:</span>
+                      <span>₹{cancelCalculation.percentageFee.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>Minimum Base Fee:</span>
+                      <span>₹{cancelCalculation.minFee.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-bold text-amber-900 pt-1 border-t border-amber-100">
+                      <span>Deduction Charge (Whichever is higher):</span>
+                      <span className="text-sm text-rose-600">₹{cancelCalculation.fee.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Amount Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                {walletModalType === "CREDIT"
+                  ? "Recharge Amount (₹) *"
+                  : walletModalType === "CANCEL_FEE"
+                  ? "Calculated Deduction Amount (₹) *"
+                  : "Debit Amount (₹) *"}
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">₹</span>
+                <input
+                  type="number"
+                  placeholder="e.g. 500"
+                  value={walletAmount}
+                  onChange={(e) => setWalletAmount(e.target.value)}
+                  className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 font-mono text-sm font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {walletModalType === "CREDIT" && (
+                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                  {[500, 1000, 2000, 5000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setWalletAmount(String(preset))}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold font-mono cursor-pointer"
+                    >
+                      +₹{preset.toLocaleString("en-IN")}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Remarks Input */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700 block">
+                Audit Notes / Remarks (Optional)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Direct bank recharge confirmed, ride cancellation deduction..."
+                value={walletRemarks}
+                onChange={(e) => setWalletRemarks(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setWalletModalType(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={submittingWallet || !walletAmount || Number(walletAmount) <= 0}
+                onClick={() => {
+                  const type = walletModalType === "CREDIT" ? "CREDIT" : "DEBIT";
+                  const amt = Number(walletAmount);
+                  handleWalletTransaction(type, amt, walletRemarks);
+                }}
+                className={`px-4 py-2 rounded-xl font-bold text-xs text-white shadow-md transition-all cursor-pointer disabled:opacity-50 ${
+                  walletModalType === "CREDIT"
+                    ? "bg-emerald-600 hover:bg-emerald-500"
+                    : walletModalType === "CANCEL_FEE"
+                    ? "bg-amber-600 hover:bg-amber-500"
+                    : "bg-rose-600 hover:bg-rose-500"
+                }`}
+              >
+                {submittingWallet
+                  ? "Processing..."
+                  : walletModalType === "CREDIT"
+                  ? "Confirm Recharge (+)"
+                  : walletModalType === "CANCEL_FEE"
+                  ? `Deduct ₹${walletAmount || "0"} Fee (-)`
+                  : "Confirm Debit (-)"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Manual Payment Modal */}
       {showPaymentModal && (

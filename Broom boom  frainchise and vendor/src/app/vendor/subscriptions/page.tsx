@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { VendorSubscriptionDetailModal } from "@/components/VendorSubscriptionDetailModal";
@@ -18,19 +19,27 @@ import {
 import { VendorSubscription, SubscriptionStatus } from "@/types";
 import { formatDate } from "@/lib/utils";
 
-export default function VendorSubscriptionsPage() {
+function VendorSubscriptionsContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const sectionParam = searchParams.get("section"); // "paid" | "failed" | null
+  const activeSection: "all" | "paid" | "failed" =
+    sectionParam === "paid" ? "paid" : sectionParam === "failed" ? "failed" : "all";
+
   const [subscriptions, setSubscriptions] = useState<VendorSubscription[]>([]);
   const [stats, setStats] = useState<{
     total: number;
     active: number;
     pending: number;
     paid: number;
+    failed?: number;
     totalRevenue: number;
   }>({
     total: 0,
     active: 0,
     pending: 0,
     paid: 0,
+    failed: 0,
     totalRevenue: 0,
   });
 
@@ -43,8 +52,21 @@ export default function VendorSubscriptionsPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState(() =>
+    sectionParam === "paid" ? "PAID" : sectionParam === "failed" ? "FAILED_OR_PENDING" : "all"
+  );
   const [tierFilter, setTierFilter] = useState("all");
+
+  // Sync paymentStatusFilter whenever sidebar section query param changes
+  useEffect(() => {
+    if (sectionParam === "paid") {
+      setPaymentStatusFilter("PAID");
+    } else if (sectionParam === "failed") {
+      setPaymentStatusFilter("FAILED_OR_PENDING");
+    } else {
+      setPaymentStatusFilter("all");
+    }
+  }, [sectionParam]);
 
   const [selectedSub, setSelectedSub] = useState<VendorSubscription | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -176,14 +198,62 @@ export default function VendorSubscriptionsPage() {
 
       <main className="flex-1 flex flex-col min-w-0">
         <Header
-          title="Vendor Subscriptions Desk"
-          subtitle="Real-time vendor partner agreements, license tiers & Cashfree payments"
+          title={
+            activeSection === "paid"
+              ? "Paid Subscriptions"
+              : activeSection === "failed"
+              ? "Failed & Pending Subscriptions"
+              : "Vendor Subscriptions Desk"
+          }
+          subtitle={
+            activeSection === "paid"
+              ? "All verified & successfully paid vendor partner subscriptions"
+              : activeSection === "failed"
+              ? "Pending & failed payment attempts requiring follow-up"
+              : "Real-time vendor partner agreements, license tiers & Cashfree payments"
+          }
           onRefresh={fetchSubscriptions}
           isRefreshing={refreshing}
           onMenuToggle={() => setMobileMenuOpen(true)}
         />
 
         <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-y-auto pb-24 lg:pb-8">
+          {/* Section Switcher Tabs (All / Paid / Failed) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => router.push("/vendor/subscriptions")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                activeSection === "all"
+                  ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              All Subscriptions ({stats.total})
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/vendor/subscriptions?section=paid")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                activeSection === "paid"
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                  : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              }`}
+            >
+              Paid ({stats.paid})
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/vendor/subscriptions?section=failed")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                activeSection === "failed"
+                  ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                  : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+              }`}
+            >
+              Failed / Pending ({stats.failed ?? stats.pending})
+            </button>
+          </div>
           {/* Top Aggregated Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm relative overflow-hidden">
@@ -254,6 +324,7 @@ export default function VendorSubscriptionsPage() {
               >
                 <option value="all">All Payments</option>
                 <option value="PAID">PAID</option>
+                <option value="FAILED_OR_PENDING">FAILED &amp; PENDING</option>
                 <option value="ACTIVE">ACTIVE (Order Initiated)</option>
                 <option value="PENDING">PENDING</option>
                 <option value="FAILED">FAILED</option>
@@ -628,5 +699,19 @@ export default function VendorSubscriptionsPage() {
         onDelete={handleDelete}
       />
     </div>
+  );
+}
+
+export default function VendorSubscriptionsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-semibold text-slate-500">
+          Loading subscriptions...
+        </div>
+      }
+    >
+      <VendorSubscriptionsContent />
+    </Suspense>
   );
 }

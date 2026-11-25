@@ -27,6 +27,52 @@ export function formatDate(dateString?: string): string {
   }
 }
 
+/**
+ * Format timestamp with explicit Date and Time (e.g. 05 Nov 2026 at 01:21 PM)
+ */
+export function formatDateTime(dateString?: string): string {
+  if (!dateString) return "—";
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    const datePart = d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${datePart} at ${timePart}`;
+  } catch {
+    return dateString;
+  }
+}
+
+/**
+ * Vendor Cancellation Charge Logic:
+ * "Vendor ka Cancellation either 100 Rs or 10% of total fare whichever is higher"
+ */
+export function calculateVendorCancellationFee(totalFare: number): {
+  fee: number;
+  percentageFee: number;
+  minFee: number;
+  formula: string;
+} {
+  const fare = Math.max(0, Number(totalFare) || 0);
+  const minFee = 100;
+  const percentageFee = Math.round(fare * 0.10);
+  const fee = Math.max(minFee, percentageFee);
+  return {
+    fee,
+    percentageFee,
+    minFee,
+    formula: `max(₹100, 10% of ₹${fare.toLocaleString("en-IN")}) = ₹${fee.toLocaleString("en-IN")}`,
+  };
+}
+
 export function formatTimeAgo(dateString?: string): string {
   if (!dateString) return "—";
 
